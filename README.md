@@ -136,4 +136,4 @@ Please use the issue tracker for project related issues.
 If you're having trouble with hardware, I did too.  Here is a [troubleshooting guide](https://github.com/granthellis/kiln-controller/blob/master/docs/troubleshooting.md) I created for testing RPi gpio pins.
 
 ## Origin
-This project was originally forked from https://github.com/apollo-ng/picoReflow but has diverged a large amount.
+This project was forked from https://github.com/jbruce12000/kiln-controller, which was orginally forked from https://github.com/apollo-ng/picoReflow but diverged a large amount.
