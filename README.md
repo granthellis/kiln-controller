@@ -60,16 +60,16 @@ My controller plugs into the wall, and the kiln plugs into the controller.
 
 Download [Raspberry PI OS](https://www.raspberrypi.org/software/). Use Rasberry PI Imaging tool to install the OS on an SD card. Boot the OS, open a terminal and...
 
-    $ sudo apt-get update
-    $ sudo apt-get dist-upgrade
-    $ sudo apt-get install python3-dev python3-virtualenv libevent-dev virtualenv
-    $ git clone https://github.com/jbruce12000/kiln-controller
-    $ cd kiln-controller
-    $ virtualenv -p python3 venv
-    $ source venv/bin/activate
-    $ export CFLAGS=-fcommon
-    $ pip3 install --upgrade setuptools
-    $ pip3 install greenlet bottle gevent gevent-websocket
+    sudo apt-get update
+    sudo apt-get dist-upgrade
+    sudo apt-get install python3-dev python3-virtualenv libevent-dev virtualenv
+    git clone https://github.com/jbruce12000/kiln-controller
+    cd kiln-controller
+    virtualenv -p python3 venv
+    source venv/bin/activate
+    export CFLAGS=-fcommon
+    pip3 install --upgrade setuptools
+    pip3 install greenlet bottle gevent gevent-websocket
 
 *Note: The above steps work on ubuntu if you prefer*
 
@@ -77,11 +77,11 @@ Download [Raspberry PI OS](https://www.raspberrypi.org/software/). Use Rasberry 
 
 If you're done playing around with simulations and want to deploy the code on a Raspberry PI to control a kiln, you'll need to do this in addition to the stuff listed above:
 
-    $ cd kiln-controller
-    $ virtualenv -p python3 venv
-    $ source venv/bin/activate
-    $ export CFLAGS=-fcommon
-    $ pip3 install -r requirements.txt
+    cd kiln-controller
+    virtualenv -p python3 venv
+    source venv/bin/activate
+    export CFLAGS=-fcommon
+    pip3 install -r requirements.txt
 
 ## Configuration
 
@@ -95,12 +95,12 @@ You may want to change the configuration parameter **sensor_time_wait**. It's th
 
 ### Server Startup
 
-    $ source venv/bin/activate; ./kiln-controller.py
+    source venv/bin/activate; ./kiln-controller.py
 
 ### Autostart Server onBoot
 If you want the server to autostart on boot, run the following command:
 
-    $ /home/pi/kiln-controller/start-on-boot
+    /home/pi/kiln-controller/start-on-boot
 
 ### Client Access
 
