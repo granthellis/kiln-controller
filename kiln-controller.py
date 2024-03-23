@@ -61,6 +61,11 @@ def handle_api():
     log.info("/api/status command received")
     return json.dumps(oven.get_state())
 
+@app.get('/api')
+def handle_api():
+    log.info("/api GET command received")
+    return json.dumps(oven.state)
+
 @app.post('/api')
 def handle_api():
     log.info("/api is alive")
