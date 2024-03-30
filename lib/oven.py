@@ -328,7 +328,7 @@ class Oven(threading.Thread):
             # this happens at start-up with a simulated oven
             temp = 0
             pass
-            rate = config.kwh_rate_peak if is_peak() else config.kwh_rate
+        rate = config.kwh_rate_peak if is_peak() else config.kwh_rate
         state = {
             'cost': self.cost,
             'runtime': self.runtime,
