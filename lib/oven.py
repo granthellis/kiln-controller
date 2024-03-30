@@ -315,7 +315,7 @@ class Oven(threading.Thread):
             if self.is_peak():
                 cost = (config.kwh_rate_peak * config.kw_elements) * ((self.heat)/3600)
             else:
-                cost = (config.kwh_rate_peak * config.kw_elements) * ((self.heat)/3600)
+                cost = (config.kwh_rate * config.kw_elements) * ((self.heat)/3600)
         else:
             cost = 0
         self.cost = self.cost + cost
