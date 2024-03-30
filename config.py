@@ -166,7 +166,7 @@ ignore_too_many_tc_errors = False
 # errors at higher temperatures due to plasma forming in the kiln.
 # Set this to True to ignore these errors and assume the temperature 
 # reading was correct anyway
-ignore_tc_short_errors = False 
+ignore_tc_short_errors = True 
 
 ########################################################################
 # automatic restarts - if you have a power brown-out and the raspberry pi
