@@ -204,7 +204,7 @@ class Oven(threading.Thread):
         self.reset()
 
     def reset(self):
-        self.cost = 0
+        #self.cost = 0   # commented out to retain cost until next run (reset in run_profile())
         self.state = "IDLE"
         self.profile = None
         self.start_time = 0
@@ -216,7 +216,8 @@ class Oven(threading.Thread):
 
     def run_profile(self, profile, startat=0):
         self.reset()
-
+        self.cost = 0
+        
         if self.board.temp_sensor.noConnection:
             log.info("Refusing to start profile - thermocouple not connected")
             return
@@ -298,9 +299,22 @@ class Oven(threading.Thread):
             log.info("total cost = %s%.2f" % (config.currency_type,self.cost))
             self.abort_run()
 
+    def is_peak(self):
+        # Checks if the current time is within the peak energy period
+        check_time = datetime.now().time()
+        begin_time = time.time(*config.peak_start)
+        end_time = time.time(*config.peak_end)
+        if begin_time < end_time:
+            return check_time >= begin_time and check_time <= end_time
+        else: # crosses midnight
+            return check_time >= begin_time or check_time <= end_time
+
     def update_cost(self):
         if self.heat:
-            cost = (config.kwh_rate * config.kw_elements) * ((self.heat)/3600)
+            if self.is_peak():
+                cost = (config.kwh_rate_peak * config.kw_elements) * ((self.heat)/3600)
+            else:
+                cost = (config.kwh_rate_peak * config.kw_elements) * ((self.heat)/3600)
         else:
             cost = 0
         self.cost = self.cost + cost

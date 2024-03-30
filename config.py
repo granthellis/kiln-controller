@@ -22,8 +22,11 @@ listening_port = 8081
 # to produce the actual cost during a run. My kiln has three
 # elements that when my switches are set to high, consume 9460 watts.
 
-kwh_rate        = 0.1319  # cost per kilowatt hour per currency_type to calculate cost to run job
-kw_elements     = 2.4 # if the kiln elements are on, the wattage in kilowatts
+kwh_rate        = 0.1298  # cost per kilowatt hour per currency_type to calculate cost to run job
+kwh_rate_peak   = 0.3355 # cost per kilowatt hour during peak time (specified in peak_start and peak_end). Make same as kwh_rate if single rate
+peak_start      = (15, 0) # start of energy peak period as (hour of the day, minute of the hour)
+peak_end        = (21, 0) # start of energy peak period as (hour of the day, minute of the hour)
+kw_elements     = 4.8 # if the kiln elements are on, the wattage in kilowatts
 currency_type   = "$"   # Currency Symbol to show when calculating cost to run job
 
 ########################################################################
