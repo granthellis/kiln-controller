@@ -303,8 +303,8 @@ class Oven(threading.Thread):
     def is_peak(self):
         # Checks if the current time is within the peak energy period
         check_time = datetime.datetime.now().time()
-        begin_time = time.time(*config.peak_start)
-        end_time = time.time(*config.peak_end)
+        begin_time = datetime.time(*config.peak_start)
+        end_time = datetime.time(*config.peak_end)
         if begin_time < end_time:
             return check_time >= begin_time and check_time <= end_time
         else: # crosses midnight
