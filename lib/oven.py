@@ -200,6 +200,7 @@ class Oven(threading.Thread):
         threading.Thread.__init__(self)
         self.daemon = True
         self.temperature = 0
+        self.cost = 0
         self.time_step = config.sensor_time_wait
         self.reset()
 
