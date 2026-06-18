@@ -222,7 +222,7 @@ class Oven(threading.Thread):
         if self.board.temp_sensor.noConnection:
             log.info("Refusing to start profile - thermocouple not connected")
             return
-        if self.board.temp_sensor.shortToGround:
+        if self.board.temp_sensor.shortToGround and config.ignore_tc_short_errors == False:
             log.info("Refusing to start profile - thermocouple short to ground")
             return
         if self.board.temp_sensor.shortToVCC:
