@@ -8,7 +8,7 @@ var selected_profile = 0;
 var selected_profile_name = 'cone-05-long-bisque.json';
 var temp_scale = "c";
 var time_scale_slope = "s";
-var time_scale_profile = "s";
+var time_scale_profile = "h";
 var time_scale_long = "Seconds";
 var temp_scale_display = "C";
 var kwh_rate = 0.26;
@@ -274,6 +274,7 @@ function enterEditMode()
     graph.profile.draggable = true;
     graph.plot = $.plot("#graph_container", [ graph.profile, graph.live ], getOptions());
     updateProfileTable();
+    toggleTable();
 }
 
 function leaveEditMode()
@@ -502,9 +503,6 @@ $(document).ready(function()
 
         ws_status.onmessage = function(e)
         {
-            console.log("received status data")
-            console.log(e.data);
-
             x = JSON.parse(e.data);
             if (x.type == "backlog")
             {
@@ -528,11 +526,11 @@ $(document).ready(function()
             if(state!="EDIT")
             {
                 state = x.state;
-
                 if (state!=state_last)
                 {
-                    if(state_last == "RUNNING")
+                    if(state_last == "RUNNING" && state != "PAUSED" )
                     {
+			console.log(state);
                         $('#target_temp').html('---');
                         updateProgress(0);
                         $.bootstrapGrowl("<span class=\"glyphicon glyphicon-exclamation-sign\"></span> <b>Run completed</b>", {
@@ -575,7 +573,13 @@ $(document).ready(function()
                 }
 
                 $('#act_temp').html(parseInt(x.temperature));
-                $('#heat').html('<div class="bar" style="height:'+x.pidstats.out*70+'%;"></div>')
+                heat_rate = parseInt(x.heat_rate)
+                if (heat_rate > 9999) { heat_rate = 9999; }
+                if (heat_rate < -9999) { heat_rate = -9999; }
+                $('#heat_rate').html(heat_rate);
+                if (typeof x.pidstats !== 'undefined') {
+                    $('#heat').html('<div class="bar" style="height:'+x.pidstats.out*70+'%;"></div>')
+                    }
                 if (x.cool > 0.5) { $('#cool').addClass("ds-led-cool-active"); } else { $('#cool').removeClass("ds-led-cool-active"); }
                 if (x.air > 0.5) { $('#air').addClass("ds-led-air-active"); } else { $('#air').removeClass("ds-led-air-active"); }
                 if (x.temperature > hazardTemp()) { $('#hazard').addClass("ds-led-hazard-active"); } else { $('#hazard').removeClass("ds-led-hazard-active"); }
@@ -608,6 +612,7 @@ $(document).ready(function()
 
             $('#act_temp_scale').html('º'+temp_scale_display);
             $('#target_temp_scale').html('º'+temp_scale_display);
+            $('#heat_rate_temp_scale').html('º'+temp_scale_display);
 
             switch(time_scale_profile){
                 case "s":

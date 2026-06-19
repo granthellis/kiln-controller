@@ -9,3 +9,5 @@ thumbs.db
 #config.py
 .idea/*
 .DS_Store
+state.json
+venv/*
