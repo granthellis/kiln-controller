@@ -1,0 +1,55 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Kiln Controller",
+        "description": "Connect to your kiln-controller server.",
+        "data": {
+          "host": "Host",
+          "port": "Port"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Failed to connect to the kiln-controller server."
+    },
+    "abort": {
+      "already_configured": "This kiln controller is already configured."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Kiln Controller options",
+        "data": {
+          "scan_interval": "Update interval (seconds)"
+        }
+      }
+    }
+  },
+  "entity": {
+    "sensor": {
+      "temperature": { "name": "Temperature" },
+      "target": { "name": "Target temperature" },
+      "state": { "name": "State" },
+      "profile": { "name": "Profile" },
+      "cost": { "name": "Cost" },
+      "kwh_rate": { "name": "kWh rate" },
+      "heat": { "name": "Heat" },
+      "runtime": { "name": "Runtime" },
+      "totaltime": { "name": "Total time" },
+      "time_remaining": { "name": "Time remaining" },
+      "projected_finish": { "name": "Projected finish" },
+      "projected_target": { "name": "Projected target" }
+    },
+    "switch": {
+      "run": { "name": "Run" }
+    },
+    "select": {
+      "profile": { "name": "Profile" }
+    },
+    "number": {
+      "startat": { "name": "Start at" }
+    }
+  }
+}
