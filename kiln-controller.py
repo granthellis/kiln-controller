@@ -5,6 +5,7 @@ import os
 import sys
 import logging
 import json
+import datetime
 
 import bottle
 import gevent
@@ -54,6 +55,32 @@ def handle_api():
     if hasattr(oven,'pid'):
         if hasattr(oven.pid,'pidstats'):
             return json.dumps(oven.pid.pidstats)
+
+@app.get('/api/status')
+def handle_api():
+    log.info("/api/status command received")
+    state = oven.get_state()
+    # extra fields for clients (e.g. the Home Assistant integration) that are
+    # not persisted in save_state() and so are not added to get_state() itself
+    state['temp_scale'] = config.temp_scale
+    if oven.state == "RUNNING" and isinstance(oven.start_time, datetime.datetime):
+        # epoch start time lets clients compute a non-drifting projected finish
+        state['start_time'] = oven.start_time.timestamp()
+        state['time_remaining'] = max(0, oven.totaltime - oven.runtime)
+        if oven.profile:
+            # full [[time, temp], ...] target curve for the active run
+            state['profile_data'] = oven.profile.data
+    return json.dumps(state)
+
+@app.get('/api/profiles')
+def handle_api_profiles():
+    log.info("/api/profiles command received")
+    return get_profiles()
+
+@app.get('/api')
+def handle_api():
+    log.info("/api GET command received")
+    return json.dumps(oven.state)
 
 
 @app.post('/api')

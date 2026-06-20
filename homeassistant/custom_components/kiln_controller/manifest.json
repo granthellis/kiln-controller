@@ -1,0 +1,11 @@
+{
+  "domain": "kiln_controller",
+  "name": "Kiln Controller",
+  "codeowners": ["@granthellis"],
+  "config_flow": true,
+  "documentation": "https://github.com/jbruce12000/kiln-controller",
+  "iot_class": "local_polling",
+  "issue_tracker": "https://github.com/jbruce12000/kiln-controller/issues",
+  "requirements": [],
+  "version": "1.0.0"
+}
