@@ -832,6 +832,14 @@ class PID():
         else:
             icomp = (error * timeDelta * (1/self.ki))
             self.iterm += (error * timeDelta * (1/self.ki))
+            # anti-windup: without this, a long sustained error (e.g. a
+            # power-limited climb pinned at the edge of the control window)
+            # winds self.iterm up far past the output range, and it then
+            # takes far longer than the error itself to unwind, causing
+            # overshoot/oscillation once setpoint is reached (observed:
+            # iterm reached ~1750 vs a window of 100, sawtoothing a soak
+            # for 2.5 hours after a long climb, 2026-07-25 firing)
+            self.iterm = sorted([-1 * window_size, self.iterm, window_size])[1]
             dErr = (error - self.lastErr) / timeDelta
             output = self.kp * error + self.iterm + self.kd * dErr
             output = sorted([-1 * window_size, output, window_size])[1]
