@@ -821,6 +821,98 @@
     },
     {
      "type": "entities",
+     "title": "Firing cost",
+     "entities": [
+      {
+       "entity": "sensor.kiln_run_cost",
+       "name": "This / last run (energy + wear)"
+      },
+      {
+       "entity": "sensor.kiln_run_energy_cost",
+       "name": "Energy"
+      },
+      {
+       "type": "attribute",
+       "entity": "sensor.kiln_run_energy_cost",
+       "attribute": "grid_kwh",
+       "name": "  from grid",
+       "suffix": " kWh"
+      },
+      {
+       "type": "attribute",
+       "entity": "sensor.kiln_run_energy_cost",
+       "attribute": "battery_kwh",
+       "name": "  from battery",
+       "suffix": " kWh"
+      },
+      {
+       "type": "attribute",
+       "entity": "sensor.kiln_run_energy_cost",
+       "attribute": "solar_kwh",
+       "name": "  from solar",
+       "suffix": " kWh"
+      },
+      {
+       "type": "attribute",
+       "entity": "sensor.kiln_run_cost",
+       "attribute": "hot_h",
+       "name": "Hot hours (>1000 \u00b0C)",
+       "suffix": " h"
+      },
+      {
+       "type": "attribute",
+       "entity": "sensor.kiln_run_cost",
+       "attribute": "wear_rate_per_hot_h",
+       "name": "Element wear rate",
+       "prefix": "$",
+       "suffix": " / hot h"
+      },
+      {
+       "type": "divider"
+      },
+      {
+       "entity": "sensor.kiln_firing_costs",
+       "name": "All costed firings"
+      },
+      {
+       "type": "attribute",
+       "entity": "sensor.kiln_firing_costs",
+       "attribute": "elementset_energy",
+       "name": "This element set: energy",
+       "prefix": "$"
+      },
+      {
+       "type": "attribute",
+       "entity": "sensor.kiln_firing_costs",
+       "attribute": "elementset_wear",
+       "name": "This element set: wear",
+       "prefix": "$"
+      },
+      {
+       "entity": "sensor.kiln_element_value_used",
+       "name": "Element value used (measured R)"
+      },
+      {
+       "entity": "input_number.kiln_element_set_price",
+       "name": "Element set price"
+      },
+      {
+       "entity": "input_number.kiln_element_life_hot_hours",
+       "name": "Element life (hot hours)"
+      },
+      {
+       "entity": "input_number.kiln_element_retire_health",
+       "name": "Replace at health"
+      }
+     ]
+    },
+    {
+     "type": "markdown",
+     "title": "Recent firing costs",
+     "content": "{% set r = state_attr('sensor.kiln_firing_costs', 'recent') or [] %}\n{% if r %}| Date | Profile | kWh | Energy | Wear | Total |\n|:--|:--|--:|--:|--:|--:|\n{% for x in r[:10] %}| {{ x.date }} | {{ x.profile }}{{ '' if x.completed else ' (ended early)' }} | {{ x.kwh }} | ${{ '%.2f' | format(x.energy_cost) }} | ${{ '%.2f' | format(x.wear_cost) }} | **${{ '%.2f' | format(x.total_cost) }}** |\n{% endfor %}\n{% set bp = state_attr('sensor.kiln_firing_costs', 'by_profile') or {} %}{% if bp %}\n**Average per completed firing**\n\n| Profile | n | Energy | Wear | Total |\n|:--|--:|--:|--:|--:|\n{% for p, s in bp.items() %}| {{ p }} | {{ s.n }} | ${{ '%.2f' | format(s.mean_energy) }} | ${{ '%.2f' | format(s.mean_wear) }} | **${{ '%.2f' | format(s.mean_total) }}** |\n{% endfor %}{% endif %}\n{% else %}No costed firings yet.{% endif %}\nEnergy is costed at the marginal rate: grid at the Amber import price, battery at its stored cost, solar at the feed-in forgone. Wear = hot hours x set price / life."
+    },
+    {
+     "type": "entities",
      "title": "Elements",
      "show_header_toggle": false,
      "entities": [
