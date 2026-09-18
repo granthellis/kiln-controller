@@ -1,0 +1,27 @@
+{
+    "alias": "Kiln apply recommended start",
+    "description": "Copy sensor.kiln_recommended_start (finish inside the 11:00-16:00 cheap window with a learned buffer) into the autostart time and arm autostart.",
+    "icon": "mdi:clock-check",
+    "mode": "single",
+    "sequence": [
+        {
+            "condition": "template",
+            "value_template": "{{ states('sensor.kiln_recommended_start') | regex_match('^\\d\\d:\\d\\d$') }}"
+        },
+        {
+            "action": "input_datetime.set_datetime",
+            "metadata": {},
+            "data": {
+                "entity_id": "input_datetime.kiln_autostart_time",
+                "time": "{{ states('sensor.kiln_recommended_start') }}:00"
+            }
+        },
+        {
+            "action": "input_boolean.turn_on",
+            "metadata": {},
+            "target": {
+                "entity_id": "input_boolean.kiln_autostart"
+            }
+        }
+    ]
+}

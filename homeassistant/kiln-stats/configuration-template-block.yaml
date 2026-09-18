@@ -1,0 +1,170 @@
+  # ── Kiln stats: element health, learned durations, solar start (2026-09-18) ──
+  # Written with Claude; plan-of-record in granthellis/kiln-controller docs/.
+  # Element resistance R = V/I from the PJ-1203A while the elements are fully
+  # on. A sample only counts when current is within 10% of full-on (V / last R)
+  # and PF >= 95, so the meter's partial-duty averages are skipped. R is flat
+  # against temperature and load, so R_baseline / R_last is heating power
+  # relative to new. kiln_run_tracker resets it at run start and copies the
+  # mean into input_number.kiln_element_r_last at run end.
+  - triggers:
+      - trigger: state
+        entity_id: sensor.kiln_energy_current_a
+      - trigger: event
+        event_type: kiln_resistance_reset
+    variables:
+      reset: "{{ trigger.platform == 'event' }}"
+      v: "{{ states('sensor.kiln_energy_voltage') | float(0) }}"
+      i: "{{ states('sensor.kiln_energy_current_a') | float(0) }}"
+      pf: "{{ states('sensor.kiln_energy_power_factor_a') | float(0) }}"
+      rl: "{{ states('input_number.kiln_element_r_last') | float(0) or 11.243 }}"
+      ok: "{{ not reset and is_state('sensor.kiln_state', 'RUNNING') and v > 180 and i >= 0.9 * v / rl and pf >= 95 }}"
+      r: "{{ v / i if ok else 0 }}"
+    sensor:
+      - name: "Kiln element resistance run"
+        unique_id: kiln_element_resistance_run
+        unit_of_measurement: "Ω"
+        state_class: measurement
+        icon: mdi:omega
+        # `this` is only defined in entity templates, not trigger variables
+        state: >-
+          {% set n = (0 if reset else this.attributes.get('n', 0) | int(0)) + (1 if r > 0 else 0) %}
+          {% set s = (0 if reset else this.attributes.get('sum', 0) | float(0)) + r %}
+          {{ (s / n) | round(3) if n > 0 else none }}
+        attributes:
+          n: "{{ (0 if reset else this.attributes.get('n', 0) | int(0)) + (1 if r > 0 else 0) }}"
+          sum: "{{ ((0 if reset else this.attributes.get('sum', 0) | float(0)) + r) | round(3) }}"
+
+  # Learned firing duration per profile (RUNNING -> IDLE wall time, catch-up
+  # included), fed by the kiln_firing_completed event from kiln_run_tracker.
+  - triggers:
+      - trigger: event
+        event_type: kiln_firing_completed
+    variables:
+      p: "{{ trigger.event.data.get('profile', '') }}"
+      h: "{{ trigger.event.data.get('duration_h', 0) | float(0) }}"
+      ok: "{{ trigger.event.data.get('completed', false) | string | lower == 'true' and p != '' and h > 0.5 }}"
+    sensor:
+      - name: "Kiln profile durations"
+        unique_id: kiln_profile_durations
+        icon: mdi:timer-cog
+        # state = completed firings learned; per-profile stats in `durations`
+        state: "{{ this.state | int(0) + (1 if ok else 0) }}"
+        attributes:
+          durations: >-
+            {%- set old = this.attributes.get('durations', {}) -%}
+            {%- if ok -%}
+            {%- set e = old.get(p, {'n': 0, 'mean_h': 0, 'max_h': 0}) -%}
+            {%- set new = {'n': e.n + 1, 'mean_h': ((e.mean_h * e.n + h) / (e.n + 1)) | round(3),
+                          'max_h': [e.max_h, h] | max | round(3), 'last_h': h | round(3)} -%}
+            {{ dict((old.items() | list) + [(p, new)]) }}
+            {%- else -%}{{ old }}{%- endif -%}
+
+  # Recommended autostart: finish as late in the cheap window as the buffer
+  # allows, because firing power rises with temperature (the candle runs on
+  # battery/grid; the high-power climb and top land in the window).
+  # buffer: 60 min before any run of the profile, 45 min for n=1-2,
+  # max(30, spread + 15) for n>=3. Seeds are the schedule length, or the
+  # measured/estimated loaded time for the FAST/QUICK profiles.
+  - triggers:
+      - trigger: state
+        entity_id:
+          - input_select.kiln_switch_schedule
+          - input_datetime.kiln_cheap_window_start
+          - input_datetime.kiln_cheap_window_end
+          - sensor.kiln_profile_durations
+      - trigger: homeassistant
+        event: start
+      - trigger: event
+        event_type: event_template_reloaded
+      - trigger: time
+        at: "00:00:05"
+    variables:
+      p: "{{ states('input_select.kiln_switch_schedule') }}"
+      seeds:
+        "cone 6 - Tony Hansen drop soak FAST": 7.62
+        "cone 10 - Tony Hansen drop soak FAST": 8.8
+        "cone 04 - drop soak FAST": 6.7
+        "cone 07 - standard bisque QUICK": 7.2
+        "cone 6 - Tony Hansen drop soak": 10.1
+        "cone 10 - Tony Hansen drop soak": 11.1
+        "cone 04 - drop soak": 8.12
+        "cone 07 - standard bisque": 8.05
+        "cone 07 - thick bisque": 10.42
+        "cone 5 - stroke n coat": 7.32
+        "cone 5 - Tony Hansen drop soak": 9.68
+        "cone 5.5 - old forge": 8.5
+        "cone 6 - old forge": 8.58
+        "cone 6 - Tony Hansen slow cool": 14.52
+        "cone 7 - Tony Hansen drop soak": 10.12
+        "cone 7 - green drop soak": 10.77
+        "cone 10 - SiC reduction": 8.13
+        "cone 10 - Tony Hansen": 10.2
+        "cone 10 - Tony Hansen slow cool": 15.2
+        "cone 10 - SiC reduction slow cool": 15.92
+        "cone 10 - long hold": 10.33
+        "4hr dry": 4.0
+        "5hr dry": 6.0
+        "1110 test": 5.98
+        "1100 element wear-in": 10.93
+      learned: "{{ (state_attr('sensor.kiln_profile_durations', 'durations') or {}).get(p) }}"
+      n: "{{ learned.n if learned else 0 }}"
+      dur_h: "{{ learned.mean_h if learned else seeds.get(p, 0) }}"
+      buffer_min: >-
+        {{ 60 if n == 0 else 45 if n < 3
+           else [30, ((learned.max_h - learned.mean_h) * 60 + 15) | round(0)] | max }}
+      ws_ts: "{{ today_at(states('input_datetime.kiln_cheap_window_start')).timestamp() }}"
+      we_ts: "{{ today_at(states('input_datetime.kiln_cheap_window_end')).timestamp() }}"
+      start_ts: "{{ we_ts - dur_h * 3600 - buffer_min * 60 }}"
+      fin_ts: "{{ start_ts + dur_h * 3600 }}"
+      in_window_h: "{{ ([0, ([fin_ts, we_ts] | min) - ([start_ts, ws_ts] | max)] | max / 3600) | round(2) }}"
+    sensor:
+      - name: "Kiln recommended start"
+        unique_id: kiln_recommended_start
+        icon: mdi:clock-start
+        state: "{{ start_ts | timestamp_custom('%H:%M') if dur_h > 0 else none }}"
+        attributes:
+          profile: "{{ p }}"
+          timezone: "Australia/Sydney"
+          duration_h: "{{ dur_h }}"
+          source: "{{ 'learned' if learned else ('seed' if dur_h > 0 else 'unknown profile') }}"
+          runs_learned: "{{ n }}"
+          buffer_min: "{{ buffer_min }}"
+          est_finish: "{{ fin_ts | timestamp_custom('%H:%M') if dur_h > 0 else none }}"
+          hours_in_window: "{{ in_window_h }}"
+
+  - sensor:
+      - name: "Kiln element health"
+        unique_id: kiln_element_health
+        unit_of_measurement: "%"
+        state_class: measurement
+        icon: mdi:heart-pulse
+        # heating power vs new at the same voltage = R_baseline / R_last
+        state: >-
+          {% set b = states('input_number.kiln_element_r_baseline') | float(0) %}
+          {% set l = states('input_number.kiln_element_r_last') | float(0) %}
+          {{ (b / l * 100) | round(1) if b > 0 and l > 0 else none }}
+      - name: "Kiln element health status"
+        unique_id: kiln_element_health_status
+        icon: mdi:heart-pulse
+        state: >-
+          {% set h = states('sensor.kiln_element_health') | float(0) %}
+          {% if h <= 0 %}unknown{% elif h >= 92 %}normal
+          {% elif h >= 85 %}slowing: top of cone 10 may lag
+          {% else %}cone 10 unreliable: plan replacement{% endif %}
+      - name: "Kiln element current at 240V"
+        unique_id: kiln_element_current_at_240v
+        unit_of_measurement: "A"
+        state_class: measurement
+        icon: mdi:current-ac
+        state: >-
+          {% set l = states('input_number.kiln_element_r_last') | float(0) %}
+          {{ (240 / l) | round(2) if l > 0 else none }}
+      - name: "Kiln element energy"
+        unique_id: kiln_element_energy
+        unit_of_measurement: "kWh"
+        state_class: total_increasing
+        icon: mdi:lightning-bolt
+        state: >-
+          {{ (states('sensor.kiln_energy_energy_a') | float(0)
+              - states('input_number.kiln_element_energy_at_change') | float(0)) | round(2) }}
+

@@ -20,8 +20,12 @@ listening_port = 8081
 # This is used to calculate a cost estimate before a run. It's also used
 # to produce the actual cost during a run. My kiln has three
 # elements that when my switches are set to high, consume 9460 watts.
-kwh_rate        = 0.1319  # cost per kilowatt hour per currency_type to calculate cost to run job
-kw_elements     = 9.460 # if the kiln elements are on, the wattage in kilowatts
+
+kwh_rate        = 0.1298  # cost per kilowatt hour per currency_type to calculate cost to run job
+kwh_rate_peak   = 0.3355 # cost per kilowatt hour during peak time (specified in peak_start and peak_end). Make same as kwh_rate if single rate
+peak_start      = (15, 0) # start of energy peak period as (hour of the day, minute of the hour)
+peak_end        = (21, 0) # start of energy peak period as (hour of the day, minute of the hour)
+kw_elements     = 4.3 # if the kiln elements are on, the wattage in kilowatts
 currency_type   = "$"   # Currency Symbol to show when calculating cost to run job
 
 ########################################################################
@@ -84,10 +88,10 @@ currency_type   = "$"   # Currency Symbol to show when calculating cost to run j
 
 try:
     import board
-    spi_sclk  = board.D17    #spi clock
-    spi_miso  = board.D27    #spi Microcomputer In Serial Out
-    spi_cs    = board.D22    #spi Chip Select
-    spi_mosi  = board.D10    #spi Microcomputer Out Serial In (not connected) 
+    #spi_sclk  = board.D17    #spi clock
+    #spi_miso  = board.D27    #spi Microcomputer In Serial Out
+    spi_cs    = board.D8    #spi Chip Select
+    #spi_mosi  = board.D10    #spi Microcomputer Out Serial In (not connected) 
     gpio_heat = board.D23    #output that controls relay
     gpio_heat_invert = False #invert the output state
 except (NotImplementedError,AttributeError):
@@ -140,9 +144,9 @@ sensor_time_wait = 2
 # well with the simulated oven. You must tune them to work well with 
 # your specific kiln. Note that the integral pid_ki is
 # inverted so that a smaller number means more integral action.
-pid_kp = 10   # Proportional 25,200,200
-pid_ki = 80   # Integral
-pid_kd = 220.83497910261562 # Derivative
+pid_kp = 12.48386755921724   # Proportional (Z-N auto-tuned @260C 2026-06-20)
+pid_ki = 16.078004285548847   # Integral (Z-N auto-tuned @260C 2026-06-20)
+pid_kd = 275   # validated @500C full-power: +0.65C overshoot, hold within ~0.7C 2026-06-20
 
 ########################################################################
 #
@@ -155,8 +159,8 @@ stop_integral_windup = True
 ########################################################################
 #
 #   Simulation parameters
-simulate = True
-sim_t_env      = 65   # deg
+simulate = False
+sim_t_env      = 60.0   # deg C
 sim_c_heat     = 500.0  # J/K  heat capacity of heat element
 sim_c_oven     = 5000.0 # J/K  heat capacity of oven
 sim_p_heat     = 5450.0 # W    heating power of oven
@@ -176,7 +180,8 @@ sim_speedup_factor = 1
 #
 # If you change the temp_scale, all settings in this file are assumed to
 # be in that scale.
-temp_scale          = "f" # c = Celsius | f = Fahrenheit - Unit to display
+
+temp_scale          = "c" # c = Celsius | f = Fahrenheit - Unit to display
 time_scale_slope    = "h" # s = Seconds | m = Minutes | h = Hours - Slope displayed in temp_scale per time_scale_slope
 time_scale_profile  = "m" # s = Seconds | m = Minutes | h = Hours - Enter and view target time in time_scale_profile
 
@@ -185,7 +190,7 @@ time_scale_profile  = "m" # s = Seconds | m = Minutes | h = Hours - Enter and vi
 # naturally cool off. If your SSR has failed/shorted/closed circuit, this
 # means your kiln receives full power until your house burns down.
 # this should not replace you watching your kiln or use of a kiln-sitter
-emergency_shutoff_temp = 2264 #cone 7
+emergency_shutoff_temp = 1270 #cone 10
 
 # If the current temperature is outside the pid control window,
 # delay the schedule until it does back inside. This allows for heating
@@ -214,7 +219,7 @@ thermocouple_offset=0
 temperature_average_samples = 10 
 
 # Thermocouple AC frequency filtering - set to True if in a 50Hz locale, else leave at False for 60Hz locale
-ac_freq_50hz = False
+ac_freq_50hz = True
 
 ########################################################################
 # Emergencies - or maybe not
@@ -238,10 +243,14 @@ ignore_tc_cold_junction_temp_low = False
 ignore_tc_temp_high = False
 ignore_tc_temp_low = False
 ignore_tc_voltage_error = False
-ignore_tc_short_errors = False 
+# some kilns/thermocouples start erroneously reporting "short"
+# errors at higher temperatures due to plasma forming in the kiln.
+# Set this to True to ignore these errors and assume the temperature
+# reading was correct anyway (preserved from local config)
+ignore_tc_short_errors = True
 ignore_tc_unknown_error = False
 
-# This overrides all possible thermocouple errors and prevents the 
+# This overrides all possible thermocouple errors and prevents the
 # process from exiting.
 ignore_tc_too_many_errors = False
 
@@ -276,4 +285,4 @@ kiln_profiles_directory = os.path.abspath(os.path.join(os.path.dirname( __file__
 # of the elements are used max.
 # To prevent throttling, set throttle_percent to 100.
 throttle_below_temp = 300
-throttle_percent = 20
+throttle_percent = 50   # was 20 (too weak to heat <300C); 50 climbs ~4.6C/min
