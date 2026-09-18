@@ -1,7 +1,7 @@
 # New elements (Sep 2026): PID check, top-rate profiles, firing stats
 
-New elements went in on 16 Sep 2026: 11.24 Ω, 21.3 A at 240 V (the old set retired at
-15.58 Ω / ~15.5 A). The first loaded firing was cone 6 on 18 Sep, about 75% full, on the new
+New elements went in on 16 Sep 2026: 11.24 Ω, 21.3 A at 240 V (the old set measured 15.58 Ω /
+~15.5 A at the end). The first loaded firing was cone 6 on 18 Sep, about 75% full, on the new
 `cone 6 - Tony Hansen drop soak FAST` profile, autostarted from Home Assistant at 06:00.
 
 Raw 5-second controller log: [`data/firings/2026-09-18-cone6-fast.csv.gz`](../data/firings/2026-09-18-cone6-fast.csv.gz)
@@ -99,13 +99,13 @@ Everything is in [`homeassistant/kiln-stats/`](../homeassistant/kiln-stats/). Th
     empty-kiln wear-in (11.23 Ω).
   - `input_number.kiln_element_r_baseline` is set to 11.243 Ω; `sensor.kiln_element_health` =
     baseline / last R.
-  - Status: ≥92% normal; 85–92% slowing (top of cone 10 may lag); <85% plan replacement. The old set
-    was retired at ~72%.
+  - Status: ≥92% normal; 85–92% slowing (top of cone 10 may lag); <85% plan replacement.
   - Also tracked: `sensor.kiln_element_current_at_240v`, `sensor.kiln_element_energy` (kWh since the set
     went in, including the wear-in) and `input_number.kiln_element_hot_hours` (5.79 h including the
     wear-in).
-  - Old-set reference: 15.21 Ω (25 Jul) → 15.58 Ω (11 Sep), about +2.4% over ~12 firings, with the steps
-    after the cone 10 firings.
+  - **The old set is not a wear reference.** Its firing count was never recorded, and its final fast
+    decline was local damage (a glob of glaze in the channel eating one section of element), not normal
+    wear. Wear rates for this set come from this set's own resistance only.
 - **Start-time recommender (solar-matched)**: `sensor.kiln_recommended_start`.
   - For each candidate start (15-min steps), it slides the profile's 15-min kiln demand curve across the
     Solcast p50 forecast for the day chosen in `input_select.kiln_firing_day` (Today, Tomorrow, In 2–6 days).
@@ -170,12 +170,13 @@ Each run gets a cost made of energy plus element wear.
   - When the meter reads 0 W between element pulses, that tick's kWh is split as if the kiln drew 1 kW.
 - **Wear**: hot hours for the run (>1000 °C while running) × `input_number.kiln_element_set_price` ($500) ÷
   `input_number.kiln_element_life_hot_hours` (500 h), which works out to $1.00 per hot hour.
-  - The 500 h life comes from the old set. Its resistance rose 2.4% (15.21 → 15.58 Ω) over ~30–33 running
-    hot hours (6 Aug – 11 Sep, VictoriaMetrics). At that rate, reaching the ~72% power at which it was
-    replaced takes 480–540 h.
-  - It's a first estimate. `sensor.kiln_element_value_used` measures the same thing from resistance
-    (R_last / R_baseline against `input_number.kiln_element_retire_health`, 72%). Once a few percent of
-    life is used, its `implied_life_hot_h` attribute says what to set the life helper to.
+  - **500 h is a placeholder**, not a measurement. The old set can't calibrate it (unknown firing count,
+    and it ended from glaze damage rather than wear), so wear $ figures are provisional until this set
+    has measured wear.
+  - `sensor.kiln_element_value_used` measures wear from resistance: R_last / R_baseline against
+    `input_number.kiln_element_retire_health`, set to 91% (the usual replace-at-+10%-resistance rule).
+    Once ≥3% of that is used (R up ~0.3%), its `implied_life_hot_h` attribute says what to set the life
+    helper to.
   - Bisque (< 1000 °C) costs about $0 in wear under this model.
 - `sensor.kiln_run_cost` shows energy + wear for the current run as it goes (or the last run, once finished).
 - At run end, `kiln_run_tracker` adds `energy_cost`, `wear_cost`, `total_cost`, `hot_h` and the per-source
@@ -193,8 +194,8 @@ Each run gets a cost made of energy plus element wear.
 | 16–17 Sep wear-in (empty) | 21.8 | 14.4 / 0.7 / 6.7 | $1.60 | 2.83 | $2.83 | $4.43 |
 | 18 Sep cone 6 FAST | 18.9 | 7.9 / 0.4 / 10.6 | $0.40 | 2.89 | $2.89 | $3.29 |
 
-On a solar-matched day, wear is most of a glaze firing's cost. So the hot hours the FAST profiles save are
-worth more than the energy they save.
+At the placeholder rate, wear is most of a glaze firing's cost on a solar-matched day. That conclusion
+stands or falls with the life figure, so revisit it once `implied_life_hot_h` is available.
 
 ## Possible follow-ups
 

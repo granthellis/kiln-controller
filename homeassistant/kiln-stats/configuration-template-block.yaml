@@ -275,7 +275,9 @@
           energy_cost: "{{ states('sensor.kiln_run_energy_cost') | float(0) }}"
       # Cross-check on the wear rate: the share of the set's life used,
       # measured from resistance. Power ∝ 1/R, so the set is spent at
-      # R = R_baseline / retire health.
+      # R = R_baseline / retire health (default 91%, i.e. the usual
+      # replace-at-+10%-resistance rule; no calibration from the old set,
+      # whose end was glaze damage, not wear).
       - name: "Kiln element value used"
         unique_id: kiln_element_value_used
         unit_of_measurement: "$"
@@ -284,21 +286,21 @@
         state: >-
           {% set b = states('input_number.kiln_element_r_baseline') | float(0) %}
           {% set l = states('input_number.kiln_element_r_last') | float(0) %}
-          {% set r = states('input_number.kiln_element_retire_health') | float(72) / 100 %}
+          {% set r = states('input_number.kiln_element_retire_health') | float(91) / 100 %}
           {% set f = ([[(l / b - 1) / (1 / r - 1), 0] | max, 1] | min) if b > 0 and l > 0 and r < 1 else 0 %}
           {{ (f * states('input_number.kiln_element_set_price') | float(0)) | round(2) }}
         attributes:
           life_used_pct: >-
             {% set b = states('input_number.kiln_element_r_baseline') | float(0) %}
             {% set l = states('input_number.kiln_element_r_last') | float(0) %}
-            {% set r = states('input_number.kiln_element_retire_health') | float(72) / 100 %}
+            {% set r = states('input_number.kiln_element_retire_health') | float(91) / 100 %}
             {{ ([[(l / b - 1) / (1 / r - 1), 0] | max, 1] | min * 100) | round(1) if b > 0 and l > 0 and r < 1 else 0 }}
           # hot hours at which the measured wear rate would spend the set;
           # only meaningful once a few % of life has been used
           implied_life_hot_h: >-
             {% set b = states('input_number.kiln_element_r_baseline') | float(0) %}
             {% set l = states('input_number.kiln_element_r_last') | float(0) %}
-            {% set r = states('input_number.kiln_element_retire_health') | float(72) / 100 %}
+            {% set r = states('input_number.kiln_element_retire_health') | float(91) / 100 %}
             {% set f = (l / b - 1) / (1 / r - 1) if b > 0 and l > 0 and r < 1 else 0 %}
             {{ (states('input_number.kiln_element_hot_hours') | float(0) / f) | round(0) if f >= 0.03 else none }}
 
