@@ -106,22 +106,42 @@ Everything is in [`homeassistant/kiln-stats/`](../homeassistant/kiln-stats/). Th
     wear-in).
   - Old-set reference: 15.21 Ω (25 Jul) → 15.58 Ω (11 Sep), about +2.4% over ~12 firings, with the steps
     after the cone 10 firings.
-- **Start-time recommender**: `sensor.kiln_recommended_start` gives the start that finishes at
-  `input_datetime.kiln_cheap_window_end` (16:00) minus a buffer.
-  - Duration is the learned mean from `sensor.kiln_profile_durations`, or the seed above.
-  - Buffer: 60 min before any run of that profile, 45 min after 1–2 runs, then
-    max(30, max − mean + 15) min.
-  - It aims to finish as late in the window as possible because firing power rises with temperature. The
-    candle is ~0.3–0.5 kW; the climb and top are 3–4.75 kW.
-  - `script.kiln_apply_recommended_start` copies it into `input_datetime.kiln_autostart_time` and turns
-    autostart on.
-  - Right now: cone 6 FAST → **07:37**, finishing ~15:15 (n = 1).
-  - Times are Australia/Sydney local clock. DST starts 4 Oct and the window stays 11:00–16:00 local.
+- **Start-time recommender (solar-matched)**: `sensor.kiln_recommended_start`.
+  - For each candidate start (15-min steps), it slides the profile's 15-min kiln demand curve across
+    **tomorrow's** Solcast p50 forecast.
+  - It scores each start by kiln kWh covered by `solar − house base load`
+    (`input_number.kiln_house_base_load`, 0.8 kW, the daytime median of house minus kiln).
+  - It picks the best start that still finishes by `input_datetime.kiln_cheap_window_end` (16:00) minus
+    the buffer, taking the earliest start on near-ties.
+  - Attributes: solar share at p50 and p10 (cloudy), kiln kWh, the no-deadline optimum (what the
+    deadline costs), and chart series.
+  - Demand curves: learned from the meter by `sensor.kiln_demand_trace_current` (kW per 15 min from run
+    start), stored per profile in `sensor.kiln_demand_traces` on each completed firing. Until a profile
+    has been fired, it uses a seed curve: measured 18 Sep for cone 6 FAST, and simulated with
+    [`tools/kiln_sim.py`](../tools/kiln_sim.py) for the rest (`demand-traces-seed.json`).
+  - Buffer: 60 min before any run of that profile, 45 min after 1–2 runs, then max(30, max − mean + 15)
+    min (durations in `sensor.kiln_profile_durations`).
+  - `script.kiln_apply_recommended_start` copies it into the autostart time and arms autostart.
+  - **Kiln dashboard** (`/dashboard-kiln`, apexcharts-card via HACS, config in
+    `dashboard-kiln.json`): tomorrow 05:00–20:00 with solar p50 (area), solar p10 (dashed) and
+    kiln + house demand at the recommended start; plus the recommendation, elements and counters.
+  - For Sat 19 Sep (Solcast clipped at 5 kW from 10:30 to 14:30):
+
+    | Profile | Start → finish | Solar share p50 / p10 | No deadline |
+    |---|---|---|---|
+    | cone 6 FAST | 07:30 → 15:15 | 94% / 55% | same |
+    | cone 10 FAST | 06:15 → 15:00 | 88% / 47% | 07:15 → 16:00, 93% |
+    | cone 04 FAST | 08:00 → 15:00 | 94% / 65% | same |
+    | cone 07 QUICK | 07:45 → 15:00 | 97% / 70% | 08:30 → 15:45, 100% |
+
+  - Battery isn't modelled: the uncovered kWh (candle, cloud) come from battery or grid.
+  - Times are Australia/Sydney local clock. DST starts 4 Oct; Solcast periods are indexed by absolute
+    time, so the DST day is handled.
 
 ## Possible follow-ups
 
-- `kw_elements = 4.3` in `config.py` under-reads the controller's own cost estimate. The new set draws
-  ~4.75 kW at 231 V, so set it to 4.8 at a convenient restart.
+- The controller's cost estimate (`kw_elements`, `kwh_rate`) isn't meaningful on a dynamic tariff with
+  solar and battery, so ignore it. The solar share in HA replaces it.
 - Throttle (50% below a 300 °C setpoint) costs ~15 min on a FAST climb. It's there for the candle, so
   leave it unless the time matters.
 - HA's `Kiln refresh rate during run` automation logs a "While condition … looped 5000 times" warning

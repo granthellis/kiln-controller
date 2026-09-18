@@ -1,0 +1,353 @@
+{
+ "title": "Kiln",
+ "views": [
+  {
+   "title": "Kiln",
+   "path": "kiln",
+   "icon": "mdi:kiln",
+   "cards": [
+    {
+     "type": "custom:apexcharts-card",
+     "header": {
+      "show": true,
+      "title": "Kiln demand vs solar forecast (firing day)"
+     },
+     "graph_span": "15h",
+     "span": {
+      "start": "day",
+      "offset": "+29h"
+     },
+     "now": {
+      "show": false
+     },
+     "yaxis": [
+      {
+       "min": 0,
+       "max": 6,
+       "decimals": 1
+      }
+     ],
+     "apex_config": {
+      "legend": {
+       "show": true
+      },
+      "tooltip": {
+       "x": {
+        "format": "HH:mm"
+       }
+      }
+     },
+     "series": [
+      {
+       "entity": "sensor.kiln_recommended_start",
+       "name": "Solar forecast (p50)",
+       "type": "area",
+       "curve": "stepline",
+       "color": "#f2b705",
+       "opacity": 0.35,
+       "stroke_width": 2,
+       "unit": "kW",
+       "data_generator": "return entity.attributes.chart_solar || [];",
+       "show": {
+        "in_header": false,
+        "legend_value": false
+       }
+      },
+      {
+       "entity": "sensor.kiln_recommended_start",
+       "name": "Solar, cloudy (p10)",
+       "type": "line",
+       "curve": "stepline",
+       "color": "#8a6d00",
+       "stroke_width": 2,
+       "stroke_dash": 4,
+       "unit": "kW",
+       "data_generator": "return entity.attributes.chart_solar_p10 || [];",
+       "show": {
+        "in_header": false,
+        "legend_value": false
+       }
+      },
+      {
+       "entity": "sensor.kiln_recommended_start",
+       "name": "Kiln + house demand",
+       "type": "area",
+       "curve": "stepline",
+       "color": "#d9480f",
+       "opacity": 0.45,
+       "stroke_width": 2,
+       "unit": "kW",
+       "data_generator": "return entity.attributes.chart_demand || [];",
+       "show": {
+        "in_header": false,
+        "legend_value": false
+       }
+      }
+     ],
+     "view_layout": {
+      "position": "main"
+     }
+    },
+    {
+     "type": "entities",
+     "title": "Recommended start",
+     "show_header_toggle": false,
+     "entities": [
+      {
+       "entity": "input_select.kiln_switch_schedule",
+       "name": "Profile"
+      },
+      {
+       "entity": "sensor.kiln_recommended_start",
+       "name": "Recommended start"
+      },
+      {
+       "type": "attribute",
+       "entity": "sensor.kiln_recommended_start",
+       "attribute": "firing_day",
+       "name": "Firing day"
+      },
+      {
+       "type": "attribute",
+       "entity": "sensor.kiln_recommended_start",
+       "attribute": "est_finish",
+       "name": "Estimated finish"
+      },
+      {
+       "type": "attribute",
+       "entity": "sensor.kiln_recommended_start",
+       "attribute": "solar_share_pct",
+       "name": "Solar share (forecast)",
+       "suffix": "%"
+      },
+      {
+       "type": "attribute",
+       "entity": "sensor.kiln_recommended_start",
+       "attribute": "solar_share_cloudy_pct",
+       "name": "Solar share (cloudy p10)",
+       "suffix": "%"
+      },
+      {
+       "type": "attribute",
+       "entity": "sensor.kiln_recommended_start",
+       "attribute": "kiln_kwh",
+       "name": "Kiln energy",
+       "suffix": "kWh"
+      },
+      {
+       "type": "attribute",
+       "entity": "sensor.kiln_recommended_start",
+       "attribute": "demand_source",
+       "name": "Demand curve"
+      },
+      {
+       "type": "attribute",
+       "entity": "sensor.kiln_recommended_start",
+       "attribute": "buffer_min",
+       "name": "Finish buffer",
+       "suffix": "min"
+      },
+      {
+       "type": "attribute",
+       "entity": "sensor.kiln_recommended_start",
+       "attribute": "solar_optimal_start_no_deadline",
+       "name": "Solar-optimal start, no deadline"
+      },
+      {
+       "type": "attribute",
+       "entity": "sensor.kiln_recommended_start",
+       "attribute": "solar_share_no_deadline_pct",
+       "name": "Solar share, no deadline",
+       "suffix": "%"
+      },
+      {
+       "type": "divider"
+      },
+      {
+       "entity": "script.kiln_apply_recommended_start",
+       "name": "Apply recommended start"
+      },
+      {
+       "entity": "input_datetime.kiln_autostart_time",
+       "name": "Autostart time"
+      },
+      {
+       "entity": "input_boolean.kiln_autostart",
+       "name": "Autostart armed"
+      },
+      {
+       "entity": "input_number.kiln_house_base_load",
+       "name": "House base load"
+      },
+      {
+       "entity": "input_datetime.kiln_cheap_window_end",
+       "name": "Must finish by"
+      }
+     ],
+     "view_layout": {
+      "position": "main"
+     }
+    },
+    {
+     "type": "entities",
+     "title": "Kiln now",
+     "show_header_toggle": false,
+     "entities": [
+      {
+       "entity": "sensor.kiln_state",
+       "name": "State"
+      },
+      {
+       "entity": "sensor.kiln_profile",
+       "name": "Running profile"
+      },
+      {
+       "entity": "sensor.kiln_temp",
+       "name": "Temperature"
+      },
+      {
+       "entity": "sensor.kiln_target_temp",
+       "name": "Target"
+      },
+      {
+       "entity": "sensor.kiln_energy_power_a",
+       "name": "Power"
+      }
+     ],
+     "view_layout": {
+      "position": "sidebar"
+     }
+    },
+    {
+     "type": "entities",
+     "title": "Elements",
+     "show_header_toggle": false,
+     "entities": [
+      {
+       "entity": "sensor.kiln_element_health",
+       "name": "Health"
+      },
+      {
+       "entity": "sensor.kiln_element_health_status",
+       "name": "Status"
+      },
+      {
+       "entity": "input_number.kiln_element_r_last",
+       "name": "Resistance, last firing"
+      },
+      {
+       "entity": "input_number.kiln_element_r_baseline",
+       "name": "Resistance, new"
+      },
+      {
+       "entity": "sensor.kiln_element_current_at_240v",
+       "name": "Current at 240 V"
+      },
+      {
+       "entity": "sensor.kiln_element_energy",
+       "name": "Energy on this set"
+      },
+      {
+       "entity": "input_number.kiln_element_hot_hours",
+       "name": "Hours above 1000 \u00b0C"
+      },
+      {
+       "entity": "counter.kiln_firings_elementset_total",
+       "name": "Firings on this set"
+      }
+     ],
+     "view_layout": {
+      "position": "sidebar"
+     }
+    },
+    {
+     "type": "entities",
+     "title": "Firings by cone",
+     "show_header_toggle": false,
+     "entities": [
+      {
+       "entity": "counter.kiln_firings_lifetime_total",
+       "name": "All firings, lifetime"
+      },
+      {
+       "entity": "counter.kiln_firings_cone_07_lifetime",
+       "name": "Cone 07, lifetime"
+      },
+      {
+       "entity": "counter.kiln_firings_cone_07_elementset",
+       "name": "Cone 07, this element set"
+      },
+      {
+       "entity": "counter.kiln_firings_cone_06_lifetime",
+       "name": "Cone 06, lifetime"
+      },
+      {
+       "entity": "counter.kiln_firings_cone_06_elementset",
+       "name": "Cone 06, this element set"
+      },
+      {
+       "entity": "counter.kiln_firings_cone_05_lifetime",
+       "name": "Cone 05, lifetime"
+      },
+      {
+       "entity": "counter.kiln_firings_cone_05_elementset",
+       "name": "Cone 05, this element set"
+      },
+      {
+       "entity": "counter.kiln_firings_cone_04_lifetime",
+       "name": "Cone 04, lifetime"
+      },
+      {
+       "entity": "counter.kiln_firings_cone_04_elementset",
+       "name": "Cone 04, this element set"
+      },
+      {
+       "entity": "counter.kiln_firings_cone_5_lifetime",
+       "name": "Cone 5, lifetime"
+      },
+      {
+       "entity": "counter.kiln_firings_cone_5_elementset",
+       "name": "Cone 5, this element set"
+      },
+      {
+       "entity": "counter.kiln_firings_cone_6_lifetime",
+       "name": "Cone 6, lifetime"
+      },
+      {
+       "entity": "counter.kiln_firings_cone_6_elementset",
+       "name": "Cone 6, this element set"
+      },
+      {
+       "entity": "counter.kiln_firings_cone_7_lifetime",
+       "name": "Cone 7, lifetime"
+      },
+      {
+       "entity": "counter.kiln_firings_cone_7_elementset",
+       "name": "Cone 7, this element set"
+      },
+      {
+       "entity": "counter.kiln_firings_cone_10_lifetime",
+       "name": "Cone 10, lifetime"
+      },
+      {
+       "entity": "counter.kiln_firings_cone_10_elementset",
+       "name": "Cone 10, this element set"
+      },
+      {
+       "entity": "counter.kiln_firings_other_lifetime",
+       "name": "Other, lifetime"
+      },
+      {
+       "entity": "counter.kiln_firings_other_elementset",
+       "name": "Other, this element set"
+      }
+     ],
+     "view_layout": {
+      "position": "sidebar"
+     }
+    }
+   ],
+   "type": "sidebar"
+  }
+ ]
+}
