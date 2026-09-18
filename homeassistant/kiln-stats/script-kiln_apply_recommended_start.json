@@ -1,0 +1,59 @@
+{
+ "alias": "Kiln apply recommended start",
+ "description": "Copy sensor.kiln_recommended_start into the autostart time and arm autostart. The autostart automation fires at the next occurrence of that clock time, so this only arms when the recommended start is within the next 24 h (today's plan, or tomorrow's set the day before); otherwise it leaves autostart alone and posts a notification.",
+ "icon": "mdi:clock-check",
+ "mode": "single",
+ "sequence": [
+  {
+   "variables": {
+    "ts": "{{ state_attr('sensor.kiln_recommended_start', 'start_ts') | float(0) }}",
+    "rec": "{{ states('sensor.kiln_recommended_start') }}"
+   }
+  },
+  {
+   "if": [
+    {
+     "condition": "template",
+     "value_template": "{{ rec | regex_match('^\\d\\d:\\d\\d$') and 0 < ts - now().timestamp() <= 86400 }}"
+    }
+   ],
+   "then": [
+    {
+     "action": "input_datetime.set_datetime",
+     "metadata": {},
+     "data": {
+      "entity_id": "input_datetime.kiln_autostart_time",
+      "time": "{{ rec }}:00"
+     }
+    },
+    {
+     "action": "input_boolean.turn_on",
+     "metadata": {},
+     "target": {
+      "entity_id": "input_boolean.kiln_autostart"
+     }
+    },
+    {
+     "action": "persistent_notification.create",
+     "metadata": {},
+     "data": {
+      "notification_id": "kiln_autostart_apply",
+      "title": "Kiln autostart armed",
+      "message": "{{ states('input_select.kiln_switch_schedule') }} starts {{ ts | timestamp_custom('%a %d %b %H:%M') }} (Australia/Sydney)."
+     }
+    }
+   ],
+   "else": [
+    {
+     "action": "persistent_notification.create",
+     "metadata": {},
+     "data": {
+      "notification_id": "kiln_autostart_apply",
+      "title": "Kiln autostart not armed",
+      "message": "{{ 'No recommended start (' ~ rec ~ ').' if ts <= 0 else 'The recommended start ' ~ (ts | timestamp_custom('%a %d %b %H:%M')) ~ ' (Australia/Sydney) is ' ~ ('in the past.' if ts <= now().timestamp() else 'more than 24 h away. Autostart fires at the next occurrence of the clock time, so apply it the day before.') }}"
+     }
+    }
+   ]
+  }
+ ]
+}
