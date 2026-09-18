@@ -7,83 +7,659 @@
    "icon": "mdi:kiln",
    "cards": [
     {
-     "type": "custom:apexcharts-card",
-     "header": {
-      "show": true,
-      "title": "Kiln demand vs solar forecast (firing day)"
-     },
-     "graph_span": "15h",
-     "span": {
-      "start": "day",
-      "offset": "+29h"
-     },
-     "now": {
-      "show": false
-     },
-     "yaxis": [
+     "type": "conditional",
+     "conditions": [
       {
-       "min": 0,
-       "max": 6,
-       "decimals": 1
+       "condition": "state",
+       "entity": "input_select.kiln_firing_day",
+       "state": "Today"
       }
      ],
-     "apex_config": {
-      "legend": {
-       "show": true
+     "card": {
+      "type": "custom:apexcharts-card",
+      "header": {
+       "show": true,
+       "title": "Kiln demand vs solar forecast"
       },
-      "tooltip": {
-       "x": {
-        "format": "HH:mm"
+      "graph_span": "15h",
+      "span": {
+       "start": "day",
+       "offset": "+5h"
+      },
+      "now": {
+       "show": true,
+       "label": "now",
+       "color": "#1c7ed6"
+      },
+      "yaxis": [
+       {
+        "min": 0,
+        "max": 6,
+        "decimals": 1
        }
-      }
+      ],
+      "apex_config": {
+       "legend": {
+        "show": true
+       },
+       "tooltip": {
+        "x": {
+         "format": "HH:mm"
+        }
+       }
+      },
+      "series": [
+       {
+        "entity": "sensor.kiln_recommended_start",
+        "name": "Solar forecast (p50)",
+        "type": "area",
+        "curve": "stepline",
+        "color": "#f2b705",
+        "opacity": 0.35,
+        "stroke_width": 2,
+        "unit": "kW",
+        "data_generator": "return entity.attributes.chart_solar || [];",
+        "show": {
+         "in_header": false,
+         "legend_value": false
+        }
+       },
+       {
+        "entity": "sensor.kiln_recommended_start",
+        "name": "Solar, cloudy (p10)",
+        "type": "line",
+        "curve": "stepline",
+        "color": "#8a6d00",
+        "stroke_width": 2,
+        "stroke_dash": 4,
+        "unit": "kW",
+        "data_generator": "return entity.attributes.chart_solar_p10 || [];",
+        "show": {
+         "in_header": false,
+         "legend_value": false
+        }
+       },
+       {
+        "entity": "sensor.kiln_recommended_start",
+        "name": "Kiln + house demand",
+        "type": "area",
+        "curve": "stepline",
+        "color": "#d9480f",
+        "opacity": 0.45,
+        "stroke_width": 2,
+        "unit": "kW",
+        "data_generator": "return entity.attributes.chart_demand || [];",
+        "show": {
+         "in_header": false,
+         "legend_value": false
+        }
+       }
+      ]
      },
-     "series": [
+     "view_layout": {
+      "position": "main"
+     }
+    },
+    {
+     "type": "conditional",
+     "conditions": [
       {
-       "entity": "sensor.kiln_recommended_start",
-       "name": "Solar forecast (p50)",
-       "type": "area",
-       "curve": "stepline",
-       "color": "#f2b705",
-       "opacity": 0.35,
-       "stroke_width": 2,
-       "unit": "kW",
-       "data_generator": "return entity.attributes.chart_solar || [];",
-       "show": {
-        "in_header": false,
-        "legend_value": false
-       }
-      },
-      {
-       "entity": "sensor.kiln_recommended_start",
-       "name": "Solar, cloudy (p10)",
-       "type": "line",
-       "curve": "stepline",
-       "color": "#8a6d00",
-       "stroke_width": 2,
-       "stroke_dash": 4,
-       "unit": "kW",
-       "data_generator": "return entity.attributes.chart_solar_p10 || [];",
-       "show": {
-        "in_header": false,
-        "legend_value": false
-       }
-      },
-      {
-       "entity": "sensor.kiln_recommended_start",
-       "name": "Kiln + house demand",
-       "type": "area",
-       "curve": "stepline",
-       "color": "#d9480f",
-       "opacity": 0.45,
-       "stroke_width": 2,
-       "unit": "kW",
-       "data_generator": "return entity.attributes.chart_demand || [];",
-       "show": {
-        "in_header": false,
-        "legend_value": false
-       }
+       "condition": "state",
+       "entity": "input_select.kiln_firing_day",
+       "state": "Tomorrow"
       }
      ],
+     "card": {
+      "type": "custom:apexcharts-card",
+      "header": {
+       "show": true,
+       "title": "Kiln demand vs solar forecast"
+      },
+      "graph_span": "15h",
+      "span": {
+       "start": "day",
+       "offset": "+29h"
+      },
+      "now": {
+       "show": false,
+       "label": "now",
+       "color": "#1c7ed6"
+      },
+      "yaxis": [
+       {
+        "min": 0,
+        "max": 6,
+        "decimals": 1
+       }
+      ],
+      "apex_config": {
+       "legend": {
+        "show": true
+       },
+       "tooltip": {
+        "x": {
+         "format": "HH:mm"
+        }
+       }
+      },
+      "series": [
+       {
+        "entity": "sensor.kiln_recommended_start",
+        "name": "Solar forecast (p50)",
+        "type": "area",
+        "curve": "stepline",
+        "color": "#f2b705",
+        "opacity": 0.35,
+        "stroke_width": 2,
+        "unit": "kW",
+        "data_generator": "return entity.attributes.chart_solar || [];",
+        "show": {
+         "in_header": false,
+         "legend_value": false
+        }
+       },
+       {
+        "entity": "sensor.kiln_recommended_start",
+        "name": "Solar, cloudy (p10)",
+        "type": "line",
+        "curve": "stepline",
+        "color": "#8a6d00",
+        "stroke_width": 2,
+        "stroke_dash": 4,
+        "unit": "kW",
+        "data_generator": "return entity.attributes.chart_solar_p10 || [];",
+        "show": {
+         "in_header": false,
+         "legend_value": false
+        }
+       },
+       {
+        "entity": "sensor.kiln_recommended_start",
+        "name": "Kiln + house demand",
+        "type": "area",
+        "curve": "stepline",
+        "color": "#d9480f",
+        "opacity": 0.45,
+        "stroke_width": 2,
+        "unit": "kW",
+        "data_generator": "return entity.attributes.chart_demand || [];",
+        "show": {
+         "in_header": false,
+         "legend_value": false
+        }
+       }
+      ]
+     },
+     "view_layout": {
+      "position": "main"
+     }
+    },
+    {
+     "type": "conditional",
+     "conditions": [
+      {
+       "condition": "state",
+       "entity": "input_select.kiln_firing_day",
+       "state": "In 2 days"
+      }
+     ],
+     "card": {
+      "type": "custom:apexcharts-card",
+      "header": {
+       "show": true,
+       "title": "Kiln demand vs solar forecast"
+      },
+      "graph_span": "15h",
+      "span": {
+       "start": "day",
+       "offset": "+53h"
+      },
+      "now": {
+       "show": false,
+       "label": "now",
+       "color": "#1c7ed6"
+      },
+      "yaxis": [
+       {
+        "min": 0,
+        "max": 6,
+        "decimals": 1
+       }
+      ],
+      "apex_config": {
+       "legend": {
+        "show": true
+       },
+       "tooltip": {
+        "x": {
+         "format": "HH:mm"
+        }
+       }
+      },
+      "series": [
+       {
+        "entity": "sensor.kiln_recommended_start",
+        "name": "Solar forecast (p50)",
+        "type": "area",
+        "curve": "stepline",
+        "color": "#f2b705",
+        "opacity": 0.35,
+        "stroke_width": 2,
+        "unit": "kW",
+        "data_generator": "return entity.attributes.chart_solar || [];",
+        "show": {
+         "in_header": false,
+         "legend_value": false
+        }
+       },
+       {
+        "entity": "sensor.kiln_recommended_start",
+        "name": "Solar, cloudy (p10)",
+        "type": "line",
+        "curve": "stepline",
+        "color": "#8a6d00",
+        "stroke_width": 2,
+        "stroke_dash": 4,
+        "unit": "kW",
+        "data_generator": "return entity.attributes.chart_solar_p10 || [];",
+        "show": {
+         "in_header": false,
+         "legend_value": false
+        }
+       },
+       {
+        "entity": "sensor.kiln_recommended_start",
+        "name": "Kiln + house demand",
+        "type": "area",
+        "curve": "stepline",
+        "color": "#d9480f",
+        "opacity": 0.45,
+        "stroke_width": 2,
+        "unit": "kW",
+        "data_generator": "return entity.attributes.chart_demand || [];",
+        "show": {
+         "in_header": false,
+         "legend_value": false
+        }
+       }
+      ]
+     },
+     "view_layout": {
+      "position": "main"
+     }
+    },
+    {
+     "type": "conditional",
+     "conditions": [
+      {
+       "condition": "state",
+       "entity": "input_select.kiln_firing_day",
+       "state": "In 3 days"
+      }
+     ],
+     "card": {
+      "type": "custom:apexcharts-card",
+      "header": {
+       "show": true,
+       "title": "Kiln demand vs solar forecast"
+      },
+      "graph_span": "15h",
+      "span": {
+       "start": "day",
+       "offset": "+77h"
+      },
+      "now": {
+       "show": false,
+       "label": "now",
+       "color": "#1c7ed6"
+      },
+      "yaxis": [
+       {
+        "min": 0,
+        "max": 6,
+        "decimals": 1
+       }
+      ],
+      "apex_config": {
+       "legend": {
+        "show": true
+       },
+       "tooltip": {
+        "x": {
+         "format": "HH:mm"
+        }
+       }
+      },
+      "series": [
+       {
+        "entity": "sensor.kiln_recommended_start",
+        "name": "Solar forecast (p50)",
+        "type": "area",
+        "curve": "stepline",
+        "color": "#f2b705",
+        "opacity": 0.35,
+        "stroke_width": 2,
+        "unit": "kW",
+        "data_generator": "return entity.attributes.chart_solar || [];",
+        "show": {
+         "in_header": false,
+         "legend_value": false
+        }
+       },
+       {
+        "entity": "sensor.kiln_recommended_start",
+        "name": "Solar, cloudy (p10)",
+        "type": "line",
+        "curve": "stepline",
+        "color": "#8a6d00",
+        "stroke_width": 2,
+        "stroke_dash": 4,
+        "unit": "kW",
+        "data_generator": "return entity.attributes.chart_solar_p10 || [];",
+        "show": {
+         "in_header": false,
+         "legend_value": false
+        }
+       },
+       {
+        "entity": "sensor.kiln_recommended_start",
+        "name": "Kiln + house demand",
+        "type": "area",
+        "curve": "stepline",
+        "color": "#d9480f",
+        "opacity": 0.45,
+        "stroke_width": 2,
+        "unit": "kW",
+        "data_generator": "return entity.attributes.chart_demand || [];",
+        "show": {
+         "in_header": false,
+         "legend_value": false
+        }
+       }
+      ]
+     },
+     "view_layout": {
+      "position": "main"
+     }
+    },
+    {
+     "type": "conditional",
+     "conditions": [
+      {
+       "condition": "state",
+       "entity": "input_select.kiln_firing_day",
+       "state": "In 4 days"
+      }
+     ],
+     "card": {
+      "type": "custom:apexcharts-card",
+      "header": {
+       "show": true,
+       "title": "Kiln demand vs solar forecast"
+      },
+      "graph_span": "15h",
+      "span": {
+       "start": "day",
+       "offset": "+101h"
+      },
+      "now": {
+       "show": false,
+       "label": "now",
+       "color": "#1c7ed6"
+      },
+      "yaxis": [
+       {
+        "min": 0,
+        "max": 6,
+        "decimals": 1
+       }
+      ],
+      "apex_config": {
+       "legend": {
+        "show": true
+       },
+       "tooltip": {
+        "x": {
+         "format": "HH:mm"
+        }
+       }
+      },
+      "series": [
+       {
+        "entity": "sensor.kiln_recommended_start",
+        "name": "Solar forecast (p50)",
+        "type": "area",
+        "curve": "stepline",
+        "color": "#f2b705",
+        "opacity": 0.35,
+        "stroke_width": 2,
+        "unit": "kW",
+        "data_generator": "return entity.attributes.chart_solar || [];",
+        "show": {
+         "in_header": false,
+         "legend_value": false
+        }
+       },
+       {
+        "entity": "sensor.kiln_recommended_start",
+        "name": "Solar, cloudy (p10)",
+        "type": "line",
+        "curve": "stepline",
+        "color": "#8a6d00",
+        "stroke_width": 2,
+        "stroke_dash": 4,
+        "unit": "kW",
+        "data_generator": "return entity.attributes.chart_solar_p10 || [];",
+        "show": {
+         "in_header": false,
+         "legend_value": false
+        }
+       },
+       {
+        "entity": "sensor.kiln_recommended_start",
+        "name": "Kiln + house demand",
+        "type": "area",
+        "curve": "stepline",
+        "color": "#d9480f",
+        "opacity": 0.45,
+        "stroke_width": 2,
+        "unit": "kW",
+        "data_generator": "return entity.attributes.chart_demand || [];",
+        "show": {
+         "in_header": false,
+         "legend_value": false
+        }
+       }
+      ]
+     },
+     "view_layout": {
+      "position": "main"
+     }
+    },
+    {
+     "type": "conditional",
+     "conditions": [
+      {
+       "condition": "state",
+       "entity": "input_select.kiln_firing_day",
+       "state": "In 5 days"
+      }
+     ],
+     "card": {
+      "type": "custom:apexcharts-card",
+      "header": {
+       "show": true,
+       "title": "Kiln demand vs solar forecast"
+      },
+      "graph_span": "15h",
+      "span": {
+       "start": "day",
+       "offset": "+125h"
+      },
+      "now": {
+       "show": false,
+       "label": "now",
+       "color": "#1c7ed6"
+      },
+      "yaxis": [
+       {
+        "min": 0,
+        "max": 6,
+        "decimals": 1
+       }
+      ],
+      "apex_config": {
+       "legend": {
+        "show": true
+       },
+       "tooltip": {
+        "x": {
+         "format": "HH:mm"
+        }
+       }
+      },
+      "series": [
+       {
+        "entity": "sensor.kiln_recommended_start",
+        "name": "Solar forecast (p50)",
+        "type": "area",
+        "curve": "stepline",
+        "color": "#f2b705",
+        "opacity": 0.35,
+        "stroke_width": 2,
+        "unit": "kW",
+        "data_generator": "return entity.attributes.chart_solar || [];",
+        "show": {
+         "in_header": false,
+         "legend_value": false
+        }
+       },
+       {
+        "entity": "sensor.kiln_recommended_start",
+        "name": "Solar, cloudy (p10)",
+        "type": "line",
+        "curve": "stepline",
+        "color": "#8a6d00",
+        "stroke_width": 2,
+        "stroke_dash": 4,
+        "unit": "kW",
+        "data_generator": "return entity.attributes.chart_solar_p10 || [];",
+        "show": {
+         "in_header": false,
+         "legend_value": false
+        }
+       },
+       {
+        "entity": "sensor.kiln_recommended_start",
+        "name": "Kiln + house demand",
+        "type": "area",
+        "curve": "stepline",
+        "color": "#d9480f",
+        "opacity": 0.45,
+        "stroke_width": 2,
+        "unit": "kW",
+        "data_generator": "return entity.attributes.chart_demand || [];",
+        "show": {
+         "in_header": false,
+         "legend_value": false
+        }
+       }
+      ]
+     },
+     "view_layout": {
+      "position": "main"
+     }
+    },
+    {
+     "type": "conditional",
+     "conditions": [
+      {
+       "condition": "state",
+       "entity": "input_select.kiln_firing_day",
+       "state": "In 6 days"
+      }
+     ],
+     "card": {
+      "type": "custom:apexcharts-card",
+      "header": {
+       "show": true,
+       "title": "Kiln demand vs solar forecast"
+      },
+      "graph_span": "15h",
+      "span": {
+       "start": "day",
+       "offset": "+149h"
+      },
+      "now": {
+       "show": false,
+       "label": "now",
+       "color": "#1c7ed6"
+      },
+      "yaxis": [
+       {
+        "min": 0,
+        "max": 6,
+        "decimals": 1
+       }
+      ],
+      "apex_config": {
+       "legend": {
+        "show": true
+       },
+       "tooltip": {
+        "x": {
+         "format": "HH:mm"
+        }
+       }
+      },
+      "series": [
+       {
+        "entity": "sensor.kiln_recommended_start",
+        "name": "Solar forecast (p50)",
+        "type": "area",
+        "curve": "stepline",
+        "color": "#f2b705",
+        "opacity": 0.35,
+        "stroke_width": 2,
+        "unit": "kW",
+        "data_generator": "return entity.attributes.chart_solar || [];",
+        "show": {
+         "in_header": false,
+         "legend_value": false
+        }
+       },
+       {
+        "entity": "sensor.kiln_recommended_start",
+        "name": "Solar, cloudy (p10)",
+        "type": "line",
+        "curve": "stepline",
+        "color": "#8a6d00",
+        "stroke_width": 2,
+        "stroke_dash": 4,
+        "unit": "kW",
+        "data_generator": "return entity.attributes.chart_solar_p10 || [];",
+        "show": {
+         "in_header": false,
+         "legend_value": false
+        }
+       },
+       {
+        "entity": "sensor.kiln_recommended_start",
+        "name": "Kiln + house demand",
+        "type": "area",
+        "curve": "stepline",
+        "color": "#d9480f",
+        "opacity": 0.45,
+        "stroke_width": 2,
+        "unit": "kW",
+        "data_generator": "return entity.attributes.chart_demand || [];",
+        "show": {
+         "in_header": false,
+         "legend_value": false
+        }
+       }
+      ]
+     },
      "view_layout": {
       "position": "main"
      }
@@ -96,6 +672,10 @@
       {
        "entity": "input_select.kiln_switch_schedule",
        "name": "Profile"
+      },
+      {
+       "entity": "input_select.kiln_firing_day",
+       "name": "Firing day"
       },
       {
        "entity": "sensor.kiln_recommended_start",
@@ -112,6 +692,12 @@
        "entity": "sensor.kiln_recommended_start",
        "attribute": "est_finish",
        "name": "Estimated finish"
+      },
+      {
+       "type": "attribute",
+       "entity": "sensor.kiln_recommended_start",
+       "attribute": "deadline_met",
+       "name": "Finishes before deadline"
       },
       {
        "type": "attribute",

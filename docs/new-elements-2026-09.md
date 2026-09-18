@@ -107,8 +107,14 @@ Everything is in [`homeassistant/kiln-stats/`](../homeassistant/kiln-stats/). Th
   - Old-set reference: 15.21 Ω (25 Jul) → 15.58 Ω (11 Sep), about +2.4% over ~12 firings, with the steps
     after the cone 10 firings.
 - **Start-time recommender (solar-matched)**: `sensor.kiln_recommended_start`.
-  - For each candidate start (15-min steps), it slides the profile's 15-min kiln demand curve across
-    **tomorrow's** Solcast p50 forecast.
+  - For each candidate start (15-min steps), it slides the profile's 15-min kiln demand curve across the
+    Solcast p50 forecast for the day chosen in `input_select.kiln_firing_day` (Today, Tomorrow, In 2–6 days).
+    Solcast covers 7 days; the day 3–7 sensors (`sensor.solcast_pv_forecast_forecast_day_3` … `_7`) were
+    disabled by default and are now enabled. Beyond about 2 days the p10 (cloudy) share spreads out a lot,
+    so treat those as a rough guide.
+  - Today: no start before now (rounded up to 15 min). If the deadline can no longer be met it falls back
+    to the best start that finishes by 20:00 and sets `deadline_met: false`; after that it reports
+    `too late today`.
   - It scores each start by kiln kWh covered by `solar − house base load`
     (`input_number.kiln_house_base_load`, 0.8 kW, the daytime median of house minus kiln).
   - It picks the best start that still finishes by `input_datetime.kiln_cheap_window_end` (16:00) minus
@@ -121,10 +127,16 @@ Everything is in [`homeassistant/kiln-stats/`](../homeassistant/kiln-stats/). Th
     [`tools/kiln_sim.py`](../tools/kiln_sim.py) for the rest (`demand-traces-seed.json`).
   - Buffer: 60 min before any run of that profile, 45 min after 1–2 runs, then max(30, max − mean + 15)
     min (durations in `sensor.kiln_profile_durations`).
-  - `script.kiln_apply_recommended_start` copies it into the autostart time and arms autostart.
+  - `script.kiln_apply_recommended_start` copies it into the autostart time and arms autostart, but only
+    when the recommended start (`start_ts`) is within the next 24 h. `automation.kiln_autostart` fires at the
+    next occurrence of the clock time, so a plan for day 3+ has to be applied the day before. Otherwise it
+    leaves autostart alone and posts a notification. Note the autostart automation switches the kiln off and
+    on if it is already on, so don't leave it armed for a time that falls inside a firing.
   - **Kiln dashboard** (`/dashboard-kiln`, apexcharts-card via HACS, config in
-    `dashboard-kiln.json`): tomorrow 05:00–20:00 with solar p50 (area), solar p10 (dashed) and
-    kiln + house demand at the recommended start; plus the recommendation, elements and counters.
+    `dashboard-kiln.json`): the firing day 05:00–20:00 with solar p50 (area), solar p10 (dashed) and
+    kiln + house demand at the recommended start (one conditional chart per selector option, since
+    apexcharts-card's span can't be templated; Today also shows a "now" line); plus the recommendation,
+    elements and counters.
   - For Sat 19 Sep (Solcast clipped at 5 kW from 10:30 to 14:30):
 
     | Profile | Start → finish | Solar share p50 / p10 | No deadline |
