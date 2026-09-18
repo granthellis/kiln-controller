@@ -123,6 +123,10 @@
   # minus the buffer. Earliest start wins near-ties. For today, no start before
   # now; if the deadline can no longer be met it falls back to the best start
   # that finishes by 20:00 (deadline_met: false).
+  # Active firing (Today + kiln RUNNING): no search. Uses the running profile
+  # and its real start; the demand curve is the meter's measured 15-min slots
+  # so far followed by the rest of the profile's curve (chart_measured has the
+  # measured part, including the current partial slot, for the dashboard).
   # Demand curve: the last completed firing of the profile (learned from the
   # meter by sensor.kiln_demand_trace_current), else a seed: measured
   # 18 Sep 2026 for cone 6 FAST, the rest simulated from a heat-balance model
@@ -136,6 +140,9 @@
           - input_select.kiln_firing_day
           - input_datetime.kiln_cheap_window_end
           - input_number.kiln_house_base_load
+          - sensor.kiln_state
+          - input_number.kiln_run_started_ts
+          - sensor.kiln_demand_trace_current
           - sensor.kiln_profile_durations
           - sensor.kiln_demand_traces
           - sensor.solcast_pv_forecast_forecast_today
@@ -153,14 +160,18 @@
       - trigger: time_pattern
         minutes: "/5"
     variables:
-      p: "{{ states('input_select.kiln_switch_schedule') }}"
-      seed_traces: {"4hr dry": [0.9, 0.8, 0.8, 0.9, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1], "5hr dry": [0.9, 0.8, 0.8, 0.9, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1], "cone 07 - standard bisque": [1.5, 1.5, 0.3, 0.1, 0.1, 0.1, 1.3, 1.6, 1.7, 1.7, 1.8, 1.9, 2.0, 2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 2.7, 2.8, 2.9, 3.0, 2.7, 2.3, 2.3, 2.4, 2.4, 2.5, 2.5, 2.1, 2.0, 2.0], "cone 07 - standard bisque QUICK": [1.5, 1.5, 0.3, 0.1, 0.1, 0.1, 1.9, 2.3, 2.4, 2.5, 2.6, 2.8, 2.9, 2.9, 2.5, 2.6, 2.7, 2.9, 3.0, 3.0, 2.3, 2.3, 2.4, 2.4, 2.4, 2.5, 2.3, 2.0, 2.0], "cone 07 - thick bisque": [1.5, 1.5, 0.3, 0.1, 0.1, 0.1, 0.8, 1.0, 1.0, 1.0, 1.1, 1.1, 1.2, 1.2, 1.3, 1.3, 1.4, 1.4, 1.5, 1.5, 1.6, 1.6, 1.7, 1.8, 1.1, 1.0, 2.1, 2.5, 2.6, 2.7, 2.8, 3.0, 3.1, 2.3, 2.3, 2.4, 2.4, 2.4, 2.5, 2.4, 2.0, 2.0], "cone 04 - drop soak": [0.6, 0.5, 0.5, 0.5, 0.6, 0.6, 0.3, 0.1, 0.1, 0.1, 1.4, 2.3, 2.4, 2.5, 2.6, 2.7, 2.9, 3.0, 3.2, 3.3, 3.5, 3.7, 3.9, 4.1, 2.5, 2.5, 2.7, 2.7, 2.8, 2.3, 0.5, 1.9, 2.1], "cone 04 - drop soak FAST": [0.6, 0.5, 0.5, 0.5, 0.6, 0.6, 0.3, 0.1, 0.1, 0.1, 1.5, 2.4, 2.4, 4.7, 4.8, 4.8, 4.8, 4.8, 4.8, 3.6, 2.4, 2.7, 2.7, 2.7, 2.5, 0.9, 1.5, 2.1], "cone 5 - stroke n coat": [0.6, 0.5, 0.5, 0.5, 0.6, 0.6, 0.3, 0.1, 0.1, 0.1, 1.5, 2.4, 2.4, 3.0, 3.1, 3.2, 3.4, 3.6, 3.8, 4.0, 4.2, 4.4, 4.7, 4.3, 2.8, 3.0, 3.1, 3.1, 3.1, 2.7], "cone 5 - Tony Hansen drop soak": [0.6, 0.5, 0.5, 0.5, 0.6, 0.6, 0.3, 0.1, 0.1, 0.1, 1.1, 1.8, 1.9, 2.0, 2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 2.8, 2.9, 3.0, 3.2, 3.3, 3.5, 3.6, 3.7, 3.9, 4.1, 3.1, 2.5, 2.9, 3.1, 3.1, 3.0, 1.2, 2.3, 2.5], "cone 5.5 - old forge": [0.9, 0.9, 0.9, 0.1, 0.1, 0.1, 0.1, 2.0, 2.0, 2.1, 2.2, 2.3, 2.5, 2.6, 2.7, 2.9, 3.0, 3.1, 3.3, 3.4, 3.6, 3.8, 3.9, 4.1, 4.0, 3.0, 3.1, 3.1, 3.2, 3.1, 1.8, 0.9, 0.8, 2.3], "cone 6 - old forge": [0.9, 0.9, 0.9, 0.1, 0.1, 0.1, 0.1, 2.0, 2.0, 2.1, 2.2, 2.3, 2.5, 2.6, 2.7, 2.9, 3.0, 3.1, 3.3, 3.4, 3.6, 3.8, 3.9, 4.1, 4.0, 3.0, 3.1, 3.1, 3.2, 3.2, 3.3, 2.5, 0.0, 0.7, 2.1], "cone 6 - Tony Hansen drop soak": [0.6, 0.5, 0.5, 0.5, 0.6, 0.6, 0.3, 0.1, 0.1, 0.1, 1.1, 1.8, 1.9, 2.0, 2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 2.7, 2.9, 3.0, 3.1, 3.3, 3.4, 3.6, 3.7, 3.9, 4.0, 4.0, 2.6, 2.7, 3.1, 3.1, 3.2, 3.1, 1.2, 2.3, 2.6], "cone 6 - Tony Hansen drop soak FAST": [0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.2, 0.1, 0.1, 0.1, 1.2, 1.9, 4.2, 4.8, 4.8, 4.8, 4.8, 4.8, 4.9, 4.8, 4.6, 4.2, 3.2, 3.0, 3.3, 3.2, 3.3, 3.0, 1.1, 2.2, 2.2], "cone 6 - Tony Hansen slow cool": [0.6, 0.5, 0.5, 0.5, 0.6, 0.6, 0.3, 0.1, 0.1, 0.1, 1.1, 1.8, 1.9, 2.0, 2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 2.7, 2.9, 3.0, 3.1, 3.3, 3.4, 3.6, 3.7, 3.9, 4.0, 4.0, 2.6, 2.7, 3.1, 3.2, 3.2, 3.1, 1.2, 2.3, 2.4, 1.9, 1.8, 1.7, 1.7, 1.6, 1.5, 1.5, 1.4, 1.3, 1.3, 1.2, 1.2, 1.1, 1.0, 1.0, 0.9, 0.9, 0.8, 1.1], "cone 7 - Tony Hansen drop soak": [0.6, 0.5, 0.5, 0.5, 0.6, 0.6, 0.3, 0.1, 0.1, 0.1, 1.1, 1.8, 1.9, 2.0, 2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 2.8, 2.9, 3.0, 3.2, 3.3, 3.4, 3.6, 3.7, 3.9, 4.1, 3.0, 3.0, 3.1, 3.1, 3.2, 3.2, 3.1, 2.8, 0.8, 2.5, 2.6], "cone 7 - green drop soak": [0.6, 0.5, 0.5, 0.5, 0.6, 0.6, 0.3, 0.1, 0.1, 0.1, 0.9, 1.6, 1.6, 1.7, 1.8, 1.9, 1.9, 2.0, 2.1, 2.2, 2.3, 2.4, 2.5, 2.7, 2.8, 2.9, 3.0, 3.2, 3.5, 3.7, 3.8, 4.0, 3.7, 3.0, 3.1, 3.1, 3.2, 3.2, 3.3, 2.9, 1.7, 1.7, 2.6, 2.6], "cone 10 - SiC reduction": [0.9, 0.9, 0.9, 0.9, 2.4, 2.4, 2.6, 3.0, 3.1, 3.3, 3.5, 3.7, 3.9, 4.1, 4.3, 4.5, 4.7, 3.8, 2.5, 2.5, 2.5, 2.5, 2.9, 3.1, 3.1, 3.2, 3.2, 3.3, 3.3, 3.4, 3.4, 3.5, 3.1], "1110 test": [0.9, 0.8, 0.8, 0.9, 2.4, 2.4, 2.6, 3.0, 3.1, 3.3, 3.5, 3.7, 3.9, 4.1, 4.3, 4.5, 4.0, 4.1, 3.0, 2.5, 2.5, 2.5, 2.5, 2.5, 2.5], "cone 10 - Tony Hansen": [0.6, 0.5, 0.5, 0.5, 0.6, 0.6, 0.3, 0.1, 0.1, 0.1, 1.1, 1.8, 1.9, 2.0, 2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 2.8, 2.9, 3.0, 3.2, 3.3, 3.5, 3.6, 3.8, 3.9, 4.1, 4.2, 2.6, 3.1, 3.2, 3.2, 3.3, 3.3, 3.4, 3.4, 3.2, 3.0], "cone 10 - Tony Hansen drop soak": [0.6, 0.5, 0.5, 0.5, 0.6, 0.6, 0.3, 0.1, 0.1, 0.1, 1.1, 1.8, 1.9, 2.0, 2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 2.8, 2.9, 3.0, 3.2, 3.3, 3.5, 3.6, 3.8, 3.9, 4.1, 4.2, 2.6, 3.1, 3.2, 3.2, 3.3, 3.3, 3.4, 3.4, 3.2, 2.4, 0.2, 2.3, 2.6], "cone 10 - Tony Hansen drop soak FAST": [0.6, 0.5, 0.5, 0.5, 0.6, 0.6, 0.3, 0.1, 0.1, 0.1, 1.5, 2.4, 2.4, 4.7, 4.8, 4.8, 4.8, 4.8, 4.8, 4.8, 4.8, 4.6, 2.8, 3.2, 3.2, 3.2, 3.3, 3.3, 3.4, 3.4, 3.2, 2.2, 0.3, 2.4, 2.6], "cone 10 - Tony Hansen slow cool": [0.6, 0.5, 0.5, 0.5, 0.6, 0.6, 0.3, 0.1, 0.1, 0.1, 1.1, 1.8, 1.9, 2.0, 2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 2.8, 2.9, 3.0, 3.2, 3.3, 3.5, 3.6, 3.8, 3.9, 4.1, 4.2, 2.6, 3.2, 3.2, 3.3, 3.3, 3.4, 3.4, 3.5, 3.3, 2.4, 0.1, 1.4, 1.8, 1.8, 1.7, 1.6, 1.6, 1.5, 1.5, 1.4, 1.3, 1.3, 1.2, 1.1, 1.1, 1.0, 1.0, 0.9, 0.8, 0.8], "cone 10 - SiC reduction slow cool": [0.6, 0.5, 0.5, 0.5, 0.6, 0.6, 0.3, 0.1, 0.1, 0.1, 1.1, 1.8, 1.9, 2.0, 2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 2.8, 2.9, 3.0, 3.2, 3.3, 1.7, 1.7, 1.7, 1.7, 3.5, 3.6, 3.7, 3.9, 4.1, 4.2, 3.4, 3.2, 3.3, 3.3, 3.4, 3.4, 3.4, 1.6, 0.3, 2.3, 2.1, 1.8, 1.8, 1.7, 1.6, 1.6, 1.5, 1.4, 1.4, 1.3, 1.3, 1.2, 1.1, 1.1, 1.0, 1.0, 0.9, 0.8, 0.8], "cone 10 - long hold": [0.6, 0.5, 0.5, 0.5, 0.6, 0.6, 0.3, 0.1, 0.1, 0.1, 1.1, 1.8, 1.9, 2.0, 2.1, 2.2, 2.3, 2.4, 2.5, 2.7, 2.8, 2.9, 3.0, 3.2, 3.3, 3.5, 3.6, 3.8, 3.9, 4.1, 4.0, 2.7, 3.2, 3.2, 3.3, 3.3, 3.4, 3.4, 3.5, 3.2, 3.0, 3.0], "1100 element wear-in": [1.1, 1.0, 1.1, 1.1, 1.1, 1.2, 1.2, 1.3, 1.3, 1.4, 1.5, 1.5, 1.6, 1.6, 1.7, 1.8, 1.8, 1.9, 2.0, 2.1, 2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 2.6, 2.7, 2.8, 2.9, 3.0, 3.1, 3.2, 3.3, 3.4, 3.2, 2.5, 2.5, 2.5, 2.5, 2.5, 2.5, 2.5, 2.5]}
-      learned: "{{ (state_attr('sensor.kiln_demand_traces', 'traces') or {}).get(p) }}"
-      trace: "{{ learned if learned else seed_traces.get(p, []) }}"
       # days from today: Today=0, Tomorrow=1, In N days=N (Solcast has 7 days)
       d: >-
         {{ {'Today': 0, 'Tomorrow': 1, 'In 2 days': 2, 'In 3 days': 3, 'In 4 days': 4,
             'In 5 days': 5, 'In 6 days': 6}.get(states('input_select.kiln_firing_day'), 1) }}
+      run_started: "{{ states('input_number.kiln_run_started_ts') | float(0) }}"
+      running: "{{ d == 0 and is_state('sensor.kiln_state', 'RUNNING') and run_started > 0 }}"
+      p: "{{ states('input_text.kiln_run_profile') if running else states('input_select.kiln_switch_schedule') }}"
+      seed_traces: {"4hr dry": [0.9, 0.8, 0.8, 0.9, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1], "5hr dry": [0.9, 0.8, 0.8, 0.9, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1], "cone 07 - standard bisque": [1.5, 1.5, 0.3, 0.1, 0.1, 0.1, 1.3, 1.6, 1.7, 1.7, 1.8, 1.9, 2.0, 2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 2.7, 2.8, 2.9, 3.0, 2.7, 2.3, 2.3, 2.4, 2.4, 2.5, 2.5, 2.1, 2.0, 2.0], "cone 07 - standard bisque QUICK": [1.5, 1.5, 0.3, 0.1, 0.1, 0.1, 1.9, 2.3, 2.4, 2.5, 2.6, 2.8, 2.9, 2.9, 2.5, 2.6, 2.7, 2.9, 3.0, 3.0, 2.3, 2.3, 2.4, 2.4, 2.4, 2.5, 2.3, 2.0, 2.0], "cone 07 - thick bisque": [1.5, 1.5, 0.3, 0.1, 0.1, 0.1, 0.8, 1.0, 1.0, 1.0, 1.1, 1.1, 1.2, 1.2, 1.3, 1.3, 1.4, 1.4, 1.5, 1.5, 1.6, 1.6, 1.7, 1.8, 1.1, 1.0, 2.1, 2.5, 2.6, 2.7, 2.8, 3.0, 3.1, 2.3, 2.3, 2.4, 2.4, 2.4, 2.5, 2.4, 2.0, 2.0], "cone 04 - drop soak": [0.6, 0.5, 0.5, 0.5, 0.6, 0.6, 0.3, 0.1, 0.1, 0.1, 1.4, 2.3, 2.4, 2.5, 2.6, 2.7, 2.9, 3.0, 3.2, 3.3, 3.5, 3.7, 3.9, 4.1, 2.5, 2.5, 2.7, 2.7, 2.8, 2.3, 0.5, 1.9, 2.1], "cone 04 - drop soak FAST": [0.6, 0.5, 0.5, 0.5, 0.6, 0.6, 0.3, 0.1, 0.1, 0.1, 1.5, 2.4, 2.4, 4.7, 4.8, 4.8, 4.8, 4.8, 4.8, 3.6, 2.4, 2.7, 2.7, 2.7, 2.5, 0.9, 1.5, 2.1], "cone 5 - stroke n coat": [0.6, 0.5, 0.5, 0.5, 0.6, 0.6, 0.3, 0.1, 0.1, 0.1, 1.5, 2.4, 2.4, 3.0, 3.1, 3.2, 3.4, 3.6, 3.8, 4.0, 4.2, 4.4, 4.7, 4.3, 2.8, 3.0, 3.1, 3.1, 3.1, 2.7], "cone 5 - Tony Hansen drop soak": [0.6, 0.5, 0.5, 0.5, 0.6, 0.6, 0.3, 0.1, 0.1, 0.1, 1.1, 1.8, 1.9, 2.0, 2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 2.8, 2.9, 3.0, 3.2, 3.3, 3.5, 3.6, 3.7, 3.9, 4.1, 3.1, 2.5, 2.9, 3.1, 3.1, 3.0, 1.2, 2.3, 2.5], "cone 5.5 - old forge": [0.9, 0.9, 0.9, 0.1, 0.1, 0.1, 0.1, 2.0, 2.0, 2.1, 2.2, 2.3, 2.5, 2.6, 2.7, 2.9, 3.0, 3.1, 3.3, 3.4, 3.6, 3.8, 3.9, 4.1, 4.0, 3.0, 3.1, 3.1, 3.2, 3.1, 1.8, 0.9, 0.8, 2.3], "cone 6 - old forge": [0.9, 0.9, 0.9, 0.1, 0.1, 0.1, 0.1, 2.0, 2.0, 2.1, 2.2, 2.3, 2.5, 2.6, 2.7, 2.9, 3.0, 3.1, 3.3, 3.4, 3.6, 3.8, 3.9, 4.1, 4.0, 3.0, 3.1, 3.1, 3.2, 3.2, 3.3, 2.5, 0.0, 0.7, 2.1], "cone 6 - Tony Hansen drop soak": [0.6, 0.5, 0.5, 0.5, 0.6, 0.6, 0.3, 0.1, 0.1, 0.1, 1.1, 1.8, 1.9, 2.0, 2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 2.7, 2.9, 3.0, 3.1, 3.3, 3.4, 3.6, 3.7, 3.9, 4.0, 4.0, 2.6, 2.7, 3.1, 3.1, 3.2, 3.1, 1.2, 2.3, 2.6], "cone 6 - Tony Hansen drop soak FAST": [0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.2, 0.1, 0.1, 0.1, 1.2, 1.9, 4.2, 4.8, 4.8, 4.8, 4.8, 4.8, 4.9, 4.8, 4.6, 4.2, 3.2, 3.0, 3.3, 3.2, 3.3, 3.0, 1.1, 2.2, 2.2], "cone 6 - Tony Hansen slow cool": [0.6, 0.5, 0.5, 0.5, 0.6, 0.6, 0.3, 0.1, 0.1, 0.1, 1.1, 1.8, 1.9, 2.0, 2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 2.7, 2.9, 3.0, 3.1, 3.3, 3.4, 3.6, 3.7, 3.9, 4.0, 4.0, 2.6, 2.7, 3.1, 3.2, 3.2, 3.1, 1.2, 2.3, 2.4, 1.9, 1.8, 1.7, 1.7, 1.6, 1.5, 1.5, 1.4, 1.3, 1.3, 1.2, 1.2, 1.1, 1.0, 1.0, 0.9, 0.9, 0.8, 1.1], "cone 7 - Tony Hansen drop soak": [0.6, 0.5, 0.5, 0.5, 0.6, 0.6, 0.3, 0.1, 0.1, 0.1, 1.1, 1.8, 1.9, 2.0, 2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 2.8, 2.9, 3.0, 3.2, 3.3, 3.4, 3.6, 3.7, 3.9, 4.1, 3.0, 3.0, 3.1, 3.1, 3.2, 3.2, 3.1, 2.8, 0.8, 2.5, 2.6], "cone 7 - green drop soak": [0.6, 0.5, 0.5, 0.5, 0.6, 0.6, 0.3, 0.1, 0.1, 0.1, 0.9, 1.6, 1.6, 1.7, 1.8, 1.9, 1.9, 2.0, 2.1, 2.2, 2.3, 2.4, 2.5, 2.7, 2.8, 2.9, 3.0, 3.2, 3.5, 3.7, 3.8, 4.0, 3.7, 3.0, 3.1, 3.1, 3.2, 3.2, 3.3, 2.9, 1.7, 1.7, 2.6, 2.6], "cone 10 - SiC reduction": [0.9, 0.9, 0.9, 0.9, 2.4, 2.4, 2.6, 3.0, 3.1, 3.3, 3.5, 3.7, 3.9, 4.1, 4.3, 4.5, 4.7, 3.8, 2.5, 2.5, 2.5, 2.5, 2.9, 3.1, 3.1, 3.2, 3.2, 3.3, 3.3, 3.4, 3.4, 3.5, 3.1], "1110 test": [0.9, 0.8, 0.8, 0.9, 2.4, 2.4, 2.6, 3.0, 3.1, 3.3, 3.5, 3.7, 3.9, 4.1, 4.3, 4.5, 4.0, 4.1, 3.0, 2.5, 2.5, 2.5, 2.5, 2.5, 2.5], "cone 10 - Tony Hansen": [0.6, 0.5, 0.5, 0.5, 0.6, 0.6, 0.3, 0.1, 0.1, 0.1, 1.1, 1.8, 1.9, 2.0, 2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 2.8, 2.9, 3.0, 3.2, 3.3, 3.5, 3.6, 3.8, 3.9, 4.1, 4.2, 2.6, 3.1, 3.2, 3.2, 3.3, 3.3, 3.4, 3.4, 3.2, 3.0], "cone 10 - Tony Hansen drop soak": [0.6, 0.5, 0.5, 0.5, 0.6, 0.6, 0.3, 0.1, 0.1, 0.1, 1.1, 1.8, 1.9, 2.0, 2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 2.8, 2.9, 3.0, 3.2, 3.3, 3.5, 3.6, 3.8, 3.9, 4.1, 4.2, 2.6, 3.1, 3.2, 3.2, 3.3, 3.3, 3.4, 3.4, 3.2, 2.4, 0.2, 2.3, 2.6], "cone 10 - Tony Hansen drop soak FAST": [0.6, 0.5, 0.5, 0.5, 0.6, 0.6, 0.3, 0.1, 0.1, 0.1, 1.5, 2.4, 2.4, 4.7, 4.8, 4.8, 4.8, 4.8, 4.8, 4.8, 4.8, 4.6, 2.8, 3.2, 3.2, 3.2, 3.3, 3.3, 3.4, 3.4, 3.2, 2.2, 0.3, 2.4, 2.6], "cone 10 - Tony Hansen slow cool": [0.6, 0.5, 0.5, 0.5, 0.6, 0.6, 0.3, 0.1, 0.1, 0.1, 1.1, 1.8, 1.9, 2.0, 2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 2.8, 2.9, 3.0, 3.2, 3.3, 3.5, 3.6, 3.8, 3.9, 4.1, 4.2, 2.6, 3.2, 3.2, 3.3, 3.3, 3.4, 3.4, 3.5, 3.3, 2.4, 0.1, 1.4, 1.8, 1.8, 1.7, 1.6, 1.6, 1.5, 1.5, 1.4, 1.3, 1.3, 1.2, 1.1, 1.1, 1.0, 1.0, 0.9, 0.8, 0.8], "cone 10 - SiC reduction slow cool": [0.6, 0.5, 0.5, 0.5, 0.6, 0.6, 0.3, 0.1, 0.1, 0.1, 1.1, 1.8, 1.9, 2.0, 2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 2.8, 2.9, 3.0, 3.2, 3.3, 1.7, 1.7, 1.7, 1.7, 3.5, 3.6, 3.7, 3.9, 4.1, 4.2, 3.4, 3.2, 3.3, 3.3, 3.4, 3.4, 3.4, 1.6, 0.3, 2.3, 2.1, 1.8, 1.8, 1.7, 1.6, 1.6, 1.5, 1.4, 1.4, 1.3, 1.3, 1.2, 1.1, 1.1, 1.0, 1.0, 0.9, 0.8, 0.8], "cone 10 - long hold": [0.6, 0.5, 0.5, 0.5, 0.6, 0.6, 0.3, 0.1, 0.1, 0.1, 1.1, 1.8, 1.9, 2.0, 2.1, 2.2, 2.3, 2.4, 2.5, 2.7, 2.8, 2.9, 3.0, 3.2, 3.3, 3.5, 3.6, 3.8, 3.9, 4.1, 4.0, 2.7, 3.2, 3.2, 3.3, 3.3, 3.4, 3.4, 3.5, 3.2, 3.0, 3.0], "1100 element wear-in": [1.1, 1.0, 1.1, 1.1, 1.1, 1.2, 1.2, 1.3, 1.3, 1.4, 1.5, 1.5, 1.6, 1.6, 1.7, 1.8, 1.8, 1.9, 2.0, 2.1, 2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 2.6, 2.7, 2.8, 2.9, 3.0, 3.1, 3.2, 3.3, 3.4, 3.2, 2.5, 2.5, 2.5, 2.5, 2.5, 2.5, 2.5, 2.5]}
+      learned: "{{ (state_attr('sensor.kiln_demand_traces', 'traces') or {}).get(p) }}"
+      plan: "{{ learned if learned else seed_traces.get(p, []) }}"
+      measured: "{{ (state_attr('sensor.kiln_demand_trace_current', 'trace') or []) if running else [] }}"
+      trace: "{{ measured + plan[measured | count:] if running else plan }}"
       fcid: >-
         {{ 'sensor.solcast_pv_forecast_forecast_'
            ~ ('today' if d == 0 else 'tomorrow' if d == 1 else 'day_' ~ (d + 1)) }}
@@ -182,11 +193,11 @@
       feasible: "{{ latest >= earliest }}"
       # latest start that still finishes by 20:00
       last_any: "{{ ((day0 + 20 * 3600 - dur_h * 3600) / 900) | int * 900 }}"
-      possible: "{{ last_any >= earliest }}"
+      possible: "{{ running or last_any >= earliest }}"
       best: >-
         {% set ns = namespace(s=latest, c=-1) %}
         {% set first = [earliest, latest - 12 * 3600] | max %}
-        {% for j in range(((latest - first) / 900) | int + 1) if feasible %}
+        {% for j in range(((latest - first) / 900) | int + 1) if feasible and not running %}
           {% set s = first + j * 900 %}
           {% set c = namespace(v=0) %}
           {% for kw in trace %}
@@ -202,7 +213,7 @@
       best_any: >-
         {% set ns = namespace(s=last_any, c=-1) %}
         {% set first = [earliest, last_any - 14 * 3600] | max %}
-        {% for j in range(((last_any - first) / 900) | int + 1) if possible %}
+        {% for j in range(((last_any - first) / 900) | int + 1) if possible and not running %}
           {% set s = first + j * 900 %}
           {% set c = namespace(v=0) %}
           {% for kw in trace %}
@@ -213,7 +224,7 @@
           {% if c.v > ns.c + 0.05 %}{% set ns.s = s %}{% set ns.c = c.v %}{% endif %}
         {% endfor %}
         {{ [ns.s, ns.c | round(1)] }}
-      start: "{{ best if feasible else best_any[0] }}"
+      start: "{{ run_started if running else best if feasible else best_any[0] }}"
       cover: >-
         {% set c = namespace(p50=0, p10=0, tot=0) %}
         {% for kw in trace %}
@@ -229,12 +240,14 @@
         unique_id: kiln_recommended_start
         icon: mdi:clock-start
         state: >-
-          {{ none if not trace else 'too late today' if not possible
+          {{ none if not trace else 'firing' if running else 'too late today' if not possible
              else start | timestamp_custom('%H:%M') }}
         attributes:
           profile: "{{ p }}"
           firing_day: "{{ day0 | timestamp_custom('%a %d %b') }}"
           days_ahead: "{{ d }}"
+          mode: "{{ 'active firing' if running else 'recommendation' }}"
+          started: "{{ run_started | timestamp_custom('%H:%M') if running else none }}"
           forecast_entity: "{{ fcid }}"
           forecast_available: "{{ sol | count > 0 }}"
           timezone: "Australia/Sydney"
@@ -242,23 +255,24 @@
           # when this is within the next 24 h (autostart fires at the next
           # occurrence of the clock time)
           start_ts: "{{ start | int if trace and possible else 0 }}"
-          deadline_met: "{{ feasible }}"
+          deadline_met: "{{ start + dur_h * 3600 <= we_ts if running else feasible }}"
           duration_h: "{{ dur_h }}"
           est_finish: "{{ (start + dur_h * 3600) | timestamp_custom('%H:%M') if trace and possible else none }}"
           latest_start: "{{ latest | timestamp_custom('%H:%M') }}"
           buffer_min: "{{ buffer_min }}"
           runs_learned: "{{ n }}"
           demand_source: >-
-            {{ 'learned (last firing)' if learned else 'measured 18 Sep 2026'
-               if p == 'cone 6 - Tony Hansen drop soak FAST' else 'simulated' if trace else 'unknown profile' }}
+            {% set src = 'last firing' if learned else 'measured 18 Sep 2026'
+               if p == 'cone 6 - Tony Hansen drop soak FAST' else 'simulated' if plan else 'unknown profile' %}
+            {{ 'measured so far, then ' ~ src if running else 'learned (last firing)' if learned else src }}
           kiln_kwh: "{{ cover.tot }}"
           solar_kwh: "{{ cover.p50 }}"
           solar_kwh_cloudy_p10: "{{ cover.p10 }}"
           solar_share_pct: "{{ (cover.p50 / cover.tot * 100) | round(0) if cover.tot > 0 else 0 }}"
           solar_share_cloudy_pct: "{{ (cover.p10 / cover.tot * 100) | round(0) if cover.tot > 0 else 0 }}"
-          solar_optimal_start_no_deadline: "{{ best_any[0] | timestamp_custom('%H:%M') if trace and possible else none }}"
-          solar_optimal_finish_no_deadline: "{{ (best_any[0] + dur_h * 3600) | timestamp_custom('%H:%M') if trace and possible else none }}"
-          solar_share_no_deadline_pct: "{{ (best_any[1] / cover.tot * 100) | round(0) if cover.tot > 0 else 0 }}"
+          solar_optimal_start_no_deadline: "{{ best_any[0] | timestamp_custom('%H:%M') if trace and possible and not running else none }}"
+          solar_optimal_finish_no_deadline: "{{ (best_any[0] + dur_h * 3600) | timestamp_custom('%H:%M') if trace and possible and not running else none }}"
+          solar_share_no_deadline_pct: "{{ (best_any[1] / cover.tot * 100) | round(0) if cover.tot > 0 and not running else none }}"
           house_base_kw: "{{ base }}"
           # chart series, [epoch ms, kW] every 30 min (solar) / 15 min (kiln)
           chart_solar: "{{ zip(fc_ms, sol) | map('list') | list }}"
@@ -272,6 +286,24 @@
               {% set kw = trace[i] if possible and t >= start and i < trace | count else 0 %}
               {% set out.v = out.v + [[(t * 1000) | int, (kw + base) | round(2)]] %}
             {% endfor %}
+            {{ out.v }}
+          # active firing only: measured kiln + house base, stepped per 15-min
+          # slot from the real start, then the current partial slot up to now
+          chart_measured: >-
+            {% set out = namespace(v=[]) %}
+            {% if running %}
+              {% for kw in measured %}
+                {% set out.v = out.v + [[((start + loop.index0 * 900) * 1000) | int, (kw + base) | round(2)]] %}
+              {% endfor %}
+              {% set a = states.sensor.kiln_demand_trace_current.attributes %}
+              {% set lt = a.get('last_t', start) | float(start) %}
+              {% set nt = now().timestamp() %}
+              {% if nt > lt + 60 %}
+                {% set kw = [(states('sensor.kiln_energy_energy_a') | float(0) - a.get('last_e', 0) | float(0)) * 3600 / (nt - lt), 0] | max %}
+                {% set t0 = start + (measured | count) * 900 %}
+                {% set out.v = out.v + [[(t0 * 1000) | int, (kw + base) | round(2)], [(nt * 1000) | int, (kw + base) | round(2)]] %}
+              {% endif %}
+            {% endif %}
             {{ out.v }}
 
   - sensor:

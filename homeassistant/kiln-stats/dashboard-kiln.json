@@ -81,7 +81,7 @@
        },
        {
         "entity": "sensor.kiln_recommended_start",
-        "name": "Kiln + house demand",
+        "name": "Kiln + house demand (plan)",
         "type": "area",
         "curve": "stepline",
         "color": "#d9480f",
@@ -93,6 +93,21 @@
          "in_header": false,
          "legend_value": false
         }
+       },
+       {
+        "entity": "sensor.kiln_recommended_start",
+        "name": "Measured so far",
+        "type": "line",
+        "curve": "stepline",
+        "color": "#7a1f00",
+        "stroke_width": 3,
+        "unit": "kW",
+        "data_generator": "return entity.attributes.chart_measured || [];",
+        "show": {
+         "in_header": false,
+         "legend_value": false
+        },
+        "extend_to": false
        }
       ]
      },

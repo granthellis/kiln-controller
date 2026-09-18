@@ -115,6 +115,11 @@ Everything is in [`homeassistant/kiln-stats/`](../homeassistant/kiln-stats/). Th
   - Today: no start before now (rounded up to 15 min). If the deadline can no longer be met it falls back
     to the best start that finishes by 20:00 and sets `deadline_met: false`; after that it reports
     `too late today`.
+  - Active firing: with Today selected and the kiln RUNNING, there is no search. The sensor shows `firing`,
+    using the running profile (`input_text.kiln_run_profile`) and its real start. The demand curve is the
+    meter's measured 15-min slots so far, followed by the rest of the profile's curve, so the estimated
+    finish and solar share update as the firing goes. The Today chart adds a "Measured so far" line
+    (`chart_measured`, including the current partial slot up to now).
   - It scores each start by kiln kWh covered by `solar − house base load`
     (`input_number.kiln_house_base_load`, 0.8 kW, the daytime median of house minus kiln).
   - It picks the best start that still finishes by `input_datetime.kiln_cheap_window_end` (16:00) minus
