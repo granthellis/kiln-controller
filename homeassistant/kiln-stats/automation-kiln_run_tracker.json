@@ -1,0 +1,370 @@
+{
+    "alias": "Kiln run tracker",
+    "description": "Firing stats: per-cone counters (lifetime + element set), peak temp/target, duration, kWh, element resistance (R = V/I at full power) and hot hours (>1000\u00b0C while running). A run counts as completed when peak temp >= peak target - 10\u00b0C; dry/test/wear-in profiles are never counted. Costs each run: energy from sensor.kiln_run_energy_cost (grid/battery/solar at the marginal rate) plus element wear = run hot hours x set price / life hot hours. Fires kiln_firing_completed (feeds sensor.kiln_firing_costs and, sensor.kiln_profile_durations).",
+    "mode": "queued",
+    "max": 25,
+    "max_exceeded": "silent",
+    "triggers": [
+        {
+            "trigger": "state",
+            "entity_id": "sensor.kiln_state",
+            "from": [
+                "IDLE",
+                "PAUSED"
+            ],
+            "to": "RUNNING",
+            "id": "start"
+        },
+        {
+            "trigger": "state",
+            "entity_id": "sensor.kiln_state",
+            "from": "RUNNING",
+            "to": "IDLE",
+            "id": "end"
+        },
+        {
+            "trigger": "template",
+            "value_template": "{{ is_state('sensor.kiln_state', 'RUNNING') and (states('sensor.kiln_temp') | float(0) > states('input_number.kiln_run_peak_temp') | float(0) or states('sensor.kiln_target_temp') | float(0) > states('input_number.kiln_run_peak_target') | float(0)) }}",
+            "id": "peak"
+        },
+        {
+            "trigger": "numeric_state",
+            "entity_id": "sensor.kiln_temp",
+            "above": 1000,
+            "id": "hot_on"
+        },
+        {
+            "trigger": "numeric_state",
+            "entity_id": "sensor.kiln_temp",
+            "below": 1000,
+            "id": "hot_off"
+        }
+    ],
+    "conditions": [],
+    "actions": [
+        {
+            "choose": [
+                {
+                    "conditions": [
+                        {
+                            "condition": "trigger",
+                            "id": "start"
+                        }
+                    ],
+                    "sequence": [
+                        {
+                            "action": "input_text.set_value",
+                            "metadata": {},
+                            "data": {
+                                "entity_id": "input_text.kiln_run_profile",
+                                "value": "{{ states('sensor.kiln_profile') if states('sensor.kiln_profile') not in ['', 'None', 'unknown', 'unavailable'] else states('input_select.kiln_switch_schedule') }}"
+                            }
+                        },
+                        {
+                            "action": "input_number.set_value",
+                            "metadata": {},
+                            "data": {
+                                "entity_id": "input_number.kiln_run_started_ts",
+                                "value": "{{ now().timestamp() | int }}"
+                            }
+                        },
+                        {
+                            "action": "input_number.set_value",
+                            "metadata": {},
+                            "data": {
+                                "entity_id": "input_number.kiln_run_energy_start",
+                                "value": "{{ states('sensor.kiln_energy_energy_a') | float(0) }}"
+                            }
+                        },
+                        {
+                            "action": "input_number.set_value",
+                            "metadata": {},
+                            "data": {
+                                "entity_id": "input_number.kiln_run_peak_temp",
+                                "value": "{{ states('sensor.kiln_temp') | float(0) }}"
+                            }
+                        },
+                        {
+                            "action": "input_number.set_value",
+                            "metadata": {},
+                            "data": {
+                                "entity_id": "input_number.kiln_run_peak_target",
+                                "value": "{{ states('sensor.kiln_target_temp') | float(0) }}"
+                            }
+                        },
+                        {
+                            "action": "input_number.set_value",
+                            "metadata": {},
+                            "data": {
+                                "entity_id": "input_number.kiln_run_hot_hours_start",
+                                "value": "{{ states('input_number.kiln_element_hot_hours') | float(0) }}"
+                            }
+                        },
+                        {
+                            "action": "input_number.set_value",
+                            "metadata": {},
+                            "data": {
+                                "entity_id": "input_number.kiln_hot_since_ts",
+                                "value": "{{ now().timestamp() | int if states('sensor.kiln_temp') | float(0) > 1000 else 0 }}"
+                            }
+                        },
+                        {
+                            "event": "kiln_resistance_reset",
+                            "event_data": {}
+                        }
+                    ]
+                },
+                {
+                    "conditions": [
+                        {
+                            "condition": "trigger",
+                            "id": "peak"
+                        }
+                    ],
+                    "sequence": [
+                        {
+                            "action": "input_number.set_value",
+                            "metadata": {},
+                            "data": {
+                                "entity_id": "input_number.kiln_run_peak_temp",
+                                "value": "{{ [states('sensor.kiln_temp') | float(0), states('input_number.kiln_run_peak_temp') | float(0)] | max | round(1) }}"
+                            }
+                        },
+                        {
+                            "action": "input_number.set_value",
+                            "metadata": {},
+                            "data": {
+                                "entity_id": "input_number.kiln_run_peak_target",
+                                "value": "{{ [states('sensor.kiln_target_temp') | float(0), states('input_number.kiln_run_peak_target') | float(0)] | max | round(1) }}"
+                            }
+                        }
+                    ]
+                },
+                {
+                    "conditions": [
+                        {
+                            "condition": "trigger",
+                            "id": "hot_on"
+                        },
+                        {
+                            "condition": "state",
+                            "entity_id": "sensor.kiln_state",
+                            "state": "RUNNING"
+                        },
+                        {
+                            "condition": "numeric_state",
+                            "entity_id": "input_number.kiln_hot_since_ts",
+                            "below": 1
+                        }
+                    ],
+                    "sequence": [
+                        {
+                            "action": "input_number.set_value",
+                            "metadata": {},
+                            "data": {
+                                "entity_id": "input_number.kiln_hot_since_ts",
+                                "value": "{{ now().timestamp() | int }}"
+                            }
+                        }
+                    ]
+                },
+                {
+                    "conditions": [
+                        {
+                            "condition": "or",
+                            "conditions": [
+                                {
+                                    "condition": "trigger",
+                                    "id": "hot_off"
+                                },
+                                {
+                                    "condition": "trigger",
+                                    "id": "end"
+                                }
+                            ]
+                        },
+                        {
+                            "condition": "numeric_state",
+                            "entity_id": "input_number.kiln_hot_since_ts",
+                            "above": 0
+                        }
+                    ],
+                    "sequence": [
+                        {
+                            "action": "input_number.set_value",
+                            "metadata": {},
+                            "data": {
+                                "entity_id": "input_number.kiln_element_hot_hours",
+                                "value": "{{ (states('input_number.kiln_element_hot_hours') | float(0) + (now().timestamp() - states('input_number.kiln_hot_since_ts') | float(0)) / 3600) | round(2) }}"
+                            }
+                        },
+                        {
+                            "action": "input_number.set_value",
+                            "metadata": {},
+                            "data": {
+                                "entity_id": "input_number.kiln_hot_since_ts",
+                                "value": 0
+                            }
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "if": [
+                {
+                    "condition": "trigger",
+                    "id": "end"
+                }
+            ],
+            "then": [
+                {
+                    "variables": {
+                        "profile": "{{ states('input_text.kiln_run_profile') }}",
+                        "cone_raw": "{{ (profile | lower | regex_findall('cone[ -]?(0?\\d+(?:\\.\\d)?)') + [''])[0] }}",
+                        "cone": "{{ 'cone_' ~ cone_raw if cone_raw in ['07', '06', '05', '04', '5', '6', '7', '10'] else 'other' }}",
+                        "excluded": "{{ profile | lower | regex_search('dry|test|wear-in') }}",
+                        "peak_temp": "{{ states('input_number.kiln_run_peak_temp') | float(0) }}",
+                        "peak_target": "{{ states('input_number.kiln_run_peak_target') | float(0) }}",
+                        "completed": "{{ peak_target > 300 and peak_temp >= peak_target - 10 }}",
+                        "counted": "{{ completed and not excluded }}",
+                        "duration_h": "{{ ((now().timestamp() - states('input_number.kiln_run_started_ts') | float(0)) / 3600) | round(3) }}",
+                        "kwh": "{{ (states('sensor.kiln_energy_energy_a') | float(0) - states('input_number.kiln_run_energy_start') | float(0)) | round(2) }}",
+                        "r_ohm": "{{ states('sensor.kiln_element_resistance_run') | float(0) }}",
+                        "r_samples": "{{ state_attr('sensor.kiln_element_resistance_run', 'n') | int(0) }}",
+                        "started_ts": "{{ states('input_number.kiln_run_started_ts') | float(0) }}",
+                        "hot_h": "{{ ([states('input_number.kiln_element_hot_hours') | float(0) - states('input_number.kiln_run_hot_hours_start') | float(0), 0] | max) | round(2) }}",
+                        "wear_rate": "{{ states('input_number.kiln_element_set_price') | float(0) / ([states('input_number.kiln_element_life_hot_hours') | float(500), 1] | max) }}",
+                        "wear_cost": "{{ (hot_h * wear_rate) | round(2) }}",
+                        "energy_cost": "{{ states('sensor.kiln_run_energy_cost') | float(0) }}",
+                        "total_cost": "{{ (energy_cost + wear_cost) | round(2) }}"
+                    }
+                },
+                {
+                    "if": [
+                        {
+                            "condition": "template",
+                            "value_template": "{{ counted }}"
+                        }
+                    ],
+                    "then": [
+                        {
+                            "action": "counter.increment",
+                            "metadata": {},
+                            "target": {
+                                "entity_id": [
+                                    "counter.kiln_firings_{{ cone }}_lifetime",
+                                    "counter.kiln_firings_{{ cone }}_elementset",
+                                    "counter.kiln_firings_lifetime_total",
+                                    "counter.kiln_firings_elementset_total"
+                                ]
+                            }
+                        }
+                    ]
+                },
+                {
+                    "if": [
+                        {
+                            "condition": "template",
+                            "value_template": "{{ r_samples >= 100 and r_ohm > 5 }}"
+                        }
+                    ],
+                    "then": [
+                        {
+                            "action": "input_number.set_value",
+                            "metadata": {},
+                            "data": {
+                                "entity_id": "input_number.kiln_element_r_last",
+                                "value": "{{ r_ohm | round(3) }}"
+                            }
+                        },
+                        {
+                            "if": [
+                                {
+                                    "condition": "numeric_state",
+                                    "entity_id": "input_number.kiln_element_r_baseline",
+                                    "below": 1
+                                }
+                            ],
+                            "then": [
+                                {
+                                    "action": "input_number.set_value",
+                                    "metadata": {},
+                                    "data": {
+                                        "entity_id": "input_number.kiln_element_r_baseline",
+                                        "value": "{{ r_ohm | round(3) }}"
+                                    }
+                                }
+                            ]
+                        },
+                        {
+                            "delay": "00:00:02"
+                        },
+                        {
+                            "if": [
+                                {
+                                    "condition": "numeric_state",
+                                    "entity_id": "sensor.kiln_element_health",
+                                    "below": 92
+                                }
+                            ],
+                            "then": [
+                                {
+                                    "action": "notify.mobile_app_s23_ultra",
+                                    "metadata": {},
+                                    "data": {
+                                        "title": "Kiln elements",
+                                        "message": "Element health {{ states('sensor.kiln_element_health') }}% ({{ states('sensor.kiln_element_health_status') }}). R {{ r_ohm | round(2) }} \u03a9 vs {{ states('input_number.kiln_element_r_baseline') }} \u03a9 new."
+                                    }
+                                }
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "event": "kiln_firing_completed",
+                    "event_data": {
+                        "profile": "{{ profile }}",
+                        "cone": "{{ cone }}",
+                        "completed": "{{ completed }}",
+                        "counted": "{{ counted }}",
+                        "duration_h": "{{ duration_h }}",
+                        "kwh": "{{ kwh }}",
+                        "peak_temp": "{{ peak_temp }}",
+                        "peak_target": "{{ peak_target }}",
+                        "r_ohm": "{{ r_ohm }}",
+                        "r_samples": "{{ r_samples }}",
+                        "date": "{{ started_ts | timestamp_custom('%Y-%m-%d') }}",
+                        "hot_h": "{{ hot_h }}",
+                        "energy_cost": "{{ energy_cost }}",
+                        "wear_cost": "{{ wear_cost }}",
+                        "total_cost": "{{ total_cost }}",
+                        "grid_kwh": "{{ state_attr('sensor.kiln_run_energy_cost', 'grid_kwh') | float(0) }}",
+                        "grid_cost": "{{ state_attr('sensor.kiln_run_energy_cost', 'grid_cost') | float(0) }}",
+                        "battery_kwh": "{{ state_attr('sensor.kiln_run_energy_cost', 'battery_kwh') | float(0) }}",
+                        "battery_cost": "{{ state_attr('sensor.kiln_run_energy_cost', 'battery_cost') | float(0) }}",
+                        "solar_kwh": "{{ state_attr('sensor.kiln_run_energy_cost', 'solar_kwh') | float(0) }}",
+                        "solar_cost": "{{ state_attr('sensor.kiln_run_energy_cost', 'solar_cost') | float(0) }}"
+                    }
+                },
+                {
+                    "action": "logbook.log",
+                    "metadata": {},
+                    "data": {
+                        "name": "Kiln",
+                        "entity_id": "sensor.kiln_state",
+                        "message": "firing {{ 'completed' if completed else 'ended early' }}: {{ profile }} ({{ cone }}{{ '' if counted else ', not counted' }}), {{ duration_h | round(2) }} h, {{ kwh }} kWh, peak {{ peak_temp }}/{{ peak_target }} \u00b0C, cost ${{ '%.2f' | format(total_cost) }} (energy ${{ '%.2f' | format(energy_cost) }}, wear ${{ '%.2f' | format(wear_cost) }} for {{ hot_h }} h >1000 \u00b0C), R {{ r_ohm }} \u03a9 from {{ r_samples }} samples"
+                    }
+                },
+                {
+                    "action": "notify.mobile_app_s23_ultra",
+                    "metadata": {},
+                    "data": {
+                        "title": "Kiln firing {{ 'done' if completed else 'ended early' }}: ${{ '%.2f' | format(total_cost) }}",
+                        "message": "{{ profile }}, {{ duration_h | round(1) }} h, {{ kwh }} kWh. Energy ${{ '%.2f' | format(energy_cost) }} (grid {{ state_attr('sensor.kiln_run_energy_cost', 'grid_kwh') | float(0) | round(1) }} / battery {{ state_attr('sensor.kiln_run_energy_cost', 'battery_kwh') | float(0) | round(1) }} / solar {{ state_attr('sensor.kiln_run_energy_cost', 'solar_kwh') | float(0) | round(1) }} kWh). Element wear ${{ '%.2f' | format(wear_cost) }} ({{ hot_h }} h above 1000 \u00b0C)."
+                    }
+                }
+            ]
+        }
+    ]
+}
