@@ -44,6 +44,10 @@ class Output(object):
         self.heater.direction = digitalio.Direction.OUTPUT 
         self.off = config.gpio_heat_invert
         self.on = not self.off
+        # 2026-10-09: drive the relay explicitly off at construction so a
+        # fresh boot (or a watchdog reboot) can never leave the elements on,
+        # even before the control loop runs its first cycle.
+        self.heater.value = self.off
 
     def heat(self,sleepfor):
         self.heater.value = self.on
@@ -331,6 +335,10 @@ class Oven(threading.Thread):
         self.daemon = True
         self.temperature = 0
         self.time_step = config.sensor_time_wait
+        # 2026-10-09: hardware watchdog handle; set by RealOven, None for
+        # SimulatedOven. run_profile() refuses to fire while a real oven's
+        # watchdog is not armed.
+        self.watchdog = None
         self.reset()
 
     def reset(self):
@@ -376,6 +384,17 @@ class Oven(threading.Thread):
             self.heat_rate = ((temp2 - temp1) / (time2 - time1))*3600
 
     def run_profile(self, profile, startat=0, allow_seek=True):
+        # 2026-10-09 fail-closed: a real kiln must never start unless the
+        # hardware watchdog is armed - a Pi freeze mid-firing would
+        # otherwise leave the elements on with nothing to reset the machine.
+        if (not config.simulate
+                and getattr(config, "watchdog", False)
+                and getattr(self, "watchdog", None) is None):
+            log.error("Refusing to start firing: hardware watchdog is not "
+                      "armed (watchdog_fail_closed=%s). See the controller "
+                      "log for the arm error." %
+                      getattr(config, "watchdog_fail_closed", True))
+            return
         log.debug('run_profile run on thread' + threading.current_thread().name)
         runtime = startat * 60
         if allow_seek:
@@ -546,9 +565,21 @@ class Oven(threading.Thread):
     def run(self):
         while True:
             log.debug('Oven running on ' + threading.current_thread().name)
+            # 2026-10-09: feed the hardware watchdog once per control-loop
+            # iteration (covers IDLE, PAUSED and RUNNING). If this loop - or
+            # the whole system - freezes, the watchdog reboots the Pi within
+            # config.watchdog_timeout seconds and the relay drops.
+            wd = getattr(self, "watchdog", None)
+            if wd is not None:
+                wd.feed()
             if self.state == "IDLE":
                 if self.should_i_automatic_restart() == True:
                     self.automatic_restart()
+                # belt and braces on top of Output's construction-time off:
+                # keep the relay explicitly off while idle
+                out = getattr(self, "output", None)
+                if out is not None:
+                    out.cool(0)
                 time.sleep(1)
                 continue
             if self.state == "PAUSED":
@@ -686,6 +717,25 @@ class RealOven(Oven):
 
         # call parent init
         Oven.__init__(self)
+
+        # 2026-10-09: arm the hardware watchdog. On a Pi freeze the kernel
+        # reboots the machine within watchdog_timeout seconds; a clean stop
+        # writes the magic-close byte first, so `systemctl stop` never
+        # reboots. If we cannot arm it, self.watchdog stays None and
+        # run_profile() refuses to start a firing (fail-closed).
+        if getattr(config, "watchdog", False):
+            from hw_watchdog import HWWatchdog
+            self.watchdog = HWWatchdog(
+                device=getattr(config, "watchdog_device", "/dev/watchdog0"),
+                timeout=getattr(config, "watchdog_timeout", 60))
+            try:
+                self.watchdog.arm()
+            except Exception as e:
+                log.error("Could not arm hardware watchdog: %s "
+                          "(watchdog_fail_closed=%s: firing will be "
+                          "refused until this is fixed)" %
+                          (e, getattr(config, "watchdog_fail_closed", True)))
+                self.watchdog = None
 
         # start thread
         self.start()
