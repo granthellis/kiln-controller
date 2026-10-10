@@ -286,3 +286,18 @@ kiln_profiles_directory = os.path.abspath(os.path.join(os.path.dirname( __file__
 # To prevent throttling, set throttle_percent to 100.
 throttle_below_temp = 300
 throttle_percent = 50   # was 20 (too weak to heat <300C); 50 climbs ~4.6C/min
+
+# ── hardware watchdog (2026-10-09, post-incident) ─────────────────────────────
+# The 2026-10-08 freeze (dying SD card, total lockup mid-firing) left the
+# elements on for ~50 min because nothing could reset a dead Pi. With
+# watchdog=True the bcm2835_wdt kernel driver reboots the machine if the
+# control loop stops feeding it for watchdog_timeout seconds; a clean stop
+# (SIGTERM/SIGINT) writes the magic-close byte first, so `systemctl stop`
+# never reboots. If the watchdog cannot be armed and watchdog_fail_closed is
+# True, a real (non-simulated) oven refuses to start a firing.
+# NOTE: on this board image the real device is /dev/watchdog0. /dev/watchdog
+# is a stale bogus node - do not "fix" the device name to it.
+watchdog = True
+watchdog_timeout = 60
+watchdog_fail_closed = True
+watchdog_device = "/dev/watchdog0"

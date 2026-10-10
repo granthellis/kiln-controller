@@ -3,6 +3,7 @@
 import time
 import os
 import sys
+import signal
 import logging
 import json
 import datetime
@@ -41,6 +42,29 @@ ovenWatcher = OvenWatcher(oven)
 # this ovenwatcher is used in the oven class for restarts
 oven.set_ovenwatcher(ovenWatcher)
 
+def _shutdown(signum, frame):
+    '''2026-10-09: a clean stop (systemctl stop / Ctrl-C) must NOT reboot
+    the Pi. Python's default SIGTERM handling exits without running cleanup,
+    so explicitly drop the relay and disarm the hardware watchdog (magic
+    close) before we go.'''
+    log.info("signal %d - shutting down cleanly" % signum)
+    out = getattr(oven, "output", None)
+    if out is not None:
+        try:
+            out.heater.value = out.off
+        except Exception:
+            pass
+    wd = getattr(oven, "watchdog", None)
+    if wd is not None:
+        try:
+            wd.disarm()
+        except Exception as e:
+            log.error("watchdog disarm failed: %s" % e)
+    os._exit(0)
+
+signal.signal(signal.SIGTERM, _shutdown)
+signal.signal(signal.SIGINT, _shutdown)
+
 @app.route('/')
 def index():
     return bottle.redirect('/picoreflow/index.html')
@@ -70,6 +94,14 @@ def handle_api():
         if oven.profile:
             # full [[time, temp], ...] target curve for the active run
             state['profile_data'] = oven.profile.data
+    # 2026-10-09: fields for the HA safety alarms (stale temp / over limit)
+    if oven.profile:
+        state['profile_peak'] = max(temp for (t, temp) in oven.profile.data)
+    wd = getattr(oven, "watchdog", None)
+    state['watchdog'] = {
+        "armed": bool(wd is not None and wd.armed),
+        "timeout_s": getattr(config, "watchdog_timeout", 60),
+    }
     return json.dumps(state)
 
 @app.get('/api/profiles')
@@ -113,6 +145,13 @@ def handle_api():
         profile_json = json.dumps(profile)
         profile = Profile(profile_json)
         oven.run_profile(profile, startat=startat, allow_seek=allow_seek)
+        if oven.state != "RUNNING":
+            # run_profile() refused the start (2026-10-09: e.g. the hardware
+            # watchdog is not armed - see the controller log). Make the
+            # refusal visible to the caller instead of failing silently.
+            return {"success": False,
+                    "error": "run refused - see controller log "
+                            "(watchdog not armed?)"}
         ovenWatcher.record(profile)
 
     if bottle.request.json['cmd'] == 'pause':
