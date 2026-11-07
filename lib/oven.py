@@ -420,21 +420,40 @@ class Oven(threading.Thread):
     def get_start_time(self):
         return datetime.datetime.now() - datetime.timedelta(milliseconds = self.runtime * 1000)
 
+    @staticmethod
+    def schedule_must_wait(target, temp, slope):
+        '''True when the kiln is *behind* the schedule and its clock must
+        pause for it.
+
+        "Behind" means short of the target in the direction the schedule is
+        moving: too cold on a rising ramp or a hold, too hot on a falling
+        ramp. Pausing there is what lets a deliberately over-ambitious ramp
+        run at full power (or a drop fall as fast as the kiln can cool).
+
+        When the kiln is *ahead* - overshot past a slow rising ramp, or
+        cooled faster than a falling one - the schedule keeps running so
+        target and temperature converge, instead of freezing the firing
+        while the kiln coasts back. 2026-11-08: a 1 C/min ramp overshot to
+        37.9 C against a 28.8 C target and the old symmetric rule froze the
+        schedule for 28 minutes while the kiln cooled back into the window.
+        '''
+        too_cold = target - temp > config.pid_control_window
+        too_hot = temp - target > config.pid_control_window
+        return (too_cold and slope >= 0) or (too_hot and slope < 0)
+
     def kiln_must_catch_up(self):
         '''shift the whole schedule forward in time by one time_step
-        to wait for the kiln to catch up'''
+        to wait for the kiln to catch up (only while it is behind - see
+        schedule_must_wait)'''
         if config.kiln_must_catch_up == True:
             temp = self.board.temp_sensor.temperature() + \
                 config.thermocouple_offset
-            # kiln too cold, wait for it to heat up
-            if self.target - temp > config.pid_control_window:
-                log.info("kiln must catch up, too cold, shifting schedule")
-                self.start_time = self.get_start_time()
-                self.catching_up = True;
-                return
-            # kiln too hot, wait for it to cool down
-            if temp - self.target > config.pid_control_window:
-                log.info("kiln must catch up, too hot, shifting schedule")
+            slope = self.profile.get_target_slope(self.runtime)
+            if self.schedule_must_wait(self.target, temp, slope):
+                if self.target > temp:
+                    log.info("kiln must catch up, too cold, shifting schedule")
+                else:
+                    log.info("kiln must catch up, too hot, shifting schedule")
                 self.start_time = self.get_start_time()
                 self.catching_up = True;
                 return
@@ -825,6 +844,14 @@ class Profile():
 
         return (prev_point, next_point)
 
+    def get_target_slope(self, time):
+        '''degrees per second of the segment containing `time`
+        (0 on a hold, and past the end of the profile)'''
+        (prev_point, next_point) = self.get_surrounding_points(time)
+        if prev_point is None or next_point is None:
+            return 0.0
+        return float(next_point[1] - prev_point[1]) / float(next_point[0] - prev_point[0])
+
     def get_target_temperature(self, time):
         if time > self.get_duration():
             return 0
@@ -845,7 +872,60 @@ class PID():
         self.lastNow = datetime.datetime.now()
         self.iterm = 0
         self.lastErr = 0
+        self.lastSetpoint = None
+        self.history = []  # (seconds, ispoint) inside the derivative window
         self.pidstats = {}
+
+    def ki_for(self, setpoint):
+        '''Integral constant for this setpoint.
+
+        Below config.pid_low_temp_below the kiln's thermal lag is far longer
+        than at the 260 C point the gains were Z-N tuned at (fitted from the
+        2026-11-08 firing: ~3.5 min from a heat pulse to the thermocouple, at
+        almost no heat loss), so the tuned integral time kp*ki ~ 200 s is
+        shorter than the lag and the loop limit-cycles (+-4 C on a 1 C/min
+        ramp, and a 120 C hold whose swing grew to +-3.5 C over 3 h on
+        2026-11-05). config.pid_ki_low lengthens it there. The integral is
+        stored in output units, so switching ki is bumpless.'''
+        ki_low = getattr(config, 'pid_ki_low', None)
+        below = getattr(config, 'pid_low_temp_below', None)
+        if ki_low and below is not None and setpoint <= below:
+            return ki_low
+        return self.ki
+
+    def derivative(self, setpoint, ispoint, now, timeDelta, error):
+        '''d(error)/dt.
+
+        With config.pid_derivative_window > 0 the measurement slope is a
+        least-squares fit over that many seconds and the setpoint slope is
+        exact, so a profile ramp still feeds forward through kd as before.
+        The raw 2 s difference (window 0, the old behaviour) is dominated by
+        the thermocouple's 0.25 C quantisation: one count is 0.125 C/s, which
+        kd=275 turns into a 34% output kick every time the reading ticks.'''
+        window = getattr(config, 'pid_derivative_window', 0)
+        if not window:
+            return (error - self.lastErr) / timeDelta
+
+        t = time.mktime(now.timetuple()) + now.microsecond / 1e6
+        self.history.append((t, ispoint))
+        self.history = [(ht, hv) for (ht, hv) in self.history if t - ht <= window]
+
+        pv_slope = 0.0
+        n = len(self.history)
+        if n >= 3:
+            mt = sum(ht for ht, _ in self.history) / n
+            mv = sum(hv for _, hv in self.history) / n
+            var = sum((ht - mt) ** 2 for ht, _ in self.history)
+            if var > 0:
+                pv_slope = sum((ht - mt) * (hv - mv) for ht, hv in self.history) / var
+
+        sp_slope = 0.0
+        if self.lastSetpoint is not None and timeDelta > 0:
+            step = setpoint - self.lastSetpoint
+            # a jump (run start, seek, restart) is a discontinuity, not a ramp
+            if abs(step) <= config.pid_control_window:
+                sp_slope = step / timeDelta
+        return sp_slope - pv_slope
 
     # FIX - this was using a really small window where the PID control
     # takes effect from -1 to 1. I changed this to various numbers and
@@ -866,7 +946,10 @@ class PID():
         icomp = 0
         output = 0
         out4logs = 0
-        dErr = 0
+        ki = self.ki_for(setpoint)
+        # computed every step (not only inside the window) so the slope
+        # history is warm when the kiln enters the control window
+        dErr = self.derivative(setpoint, ispoint, now, timeDelta, error)
         if error < (-1 * config.pid_control_window):
             log.info("kiln outside pid control window, max cooling")
             output = 0
@@ -880,8 +963,8 @@ class PID():
                     output = config.throttle_percent/100
                     log.info("max heating throttled at %d percent below %d degrees to prevent overshoot" % (config.throttle_percent,config.throttle_below_temp))
         else:
-            icomp = (error * timeDelta * (1/self.ki))
-            self.iterm += (error * timeDelta * (1/self.ki))
+            icomp = (error * timeDelta * (1/ki))
+            self.iterm += (error * timeDelta * (1/ki))
             # anti-windup: without this, a long sustained error (e.g. a
             # power-limited climb pinned at the edge of the control window)
             # winds self.iterm up far past the output range, and it then
@@ -890,13 +973,13 @@ class PID():
             # iterm reached ~1750 vs a window of 100, sawtoothing a soak
             # for 2.5 hours after a long climb, 2026-07-25 firing)
             self.iterm = sorted([-1 * window_size, self.iterm, window_size])[1]
-            dErr = (error - self.lastErr) / timeDelta
             output = self.kp * error + self.iterm + self.kd * dErr
             output = sorted([-1 * window_size, output, window_size])[1]
             out4logs = output
             output = float(output / window_size)
             
         self.lastErr = error
+        self.lastSetpoint = setpoint
         self.lastNow = now
 
         # no active cooling
@@ -914,7 +997,7 @@ class PID():
             'i': self.iterm,
             'd': self.kd * dErr,
             'kp': self.kp,
-            'ki': self.ki,
+            'ki': ki,
             'kd': self.kd,
             'pid': out4logs,
             'out': output,
