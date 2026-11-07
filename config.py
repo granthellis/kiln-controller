@@ -148,6 +148,25 @@ pid_kp = 12.48386755921724   # Proportional (Z-N auto-tuned @260C 2026-06-20)
 pid_ki = 16.078004285548847   # Integral (Z-N auto-tuned @260C 2026-06-20)
 pid_kd = 275   # validated @500C full-power: +0.65C overshoot, hold within ~0.7C 2026-06-20
 
+# Low-temperature integral (2026-11-08). The gains above were tuned at 260C.
+# Below ~200C the kiln has almost no heat loss and ~3.5 min of lag from a heat
+# pulse to the thermocouple, so kp*ki (~200 s of integral time) is shorter
+# than the lag and the loop limit-cycles: +-4C on a 1C/min ramp, and a 120C
+# hold that grew to +-3.5C over 3 h (5hr dry, 2026-11-05). pid_ki_low gives
+# ~600 s of integral time (kp*ki) at setpoints <= pid_low_temp_below; in a
+# plant model fitted to the 2026-11-08 firing that cut tracking error from
+# 2.3C to 0.3C RMS and stayed stable with the kiln's gain or lag off by 50%.
+# Set pid_ki_low = None to use pid_ki everywhere.
+pid_low_temp_below = 200 # setpoint, degrees
+pid_ki_low = 48
+
+# Derivative filtering (2026-11-08). The thermocouple reads in 0.25C steps;
+# differencing raw readings every 2 s turns each step into a 34% output kick
+# (kd=275), so the D term was noise. Instead the kiln's rate of change is a
+# least-squares slope over this many seconds; the profile's own slope is still
+# exact. 0 = the old raw 2 s difference.
+pid_derivative_window = 30 # seconds
+
 ########################################################################
 #
 # Initial heating and Integral Windup
@@ -192,9 +211,13 @@ time_scale_profile  = "m" # s = Seconds | m = Minutes | h = Hours - Enter and vi
 # this should not replace you watching your kiln or use of a kiln-sitter
 emergency_shutoff_temp = 1270 #cone 10
 
-# If the current temperature is outside the pid control window,
-# delay the schedule until it does back inside. This allows for heating
+# If the kiln is behind the schedule by more than the pid control window,
+# delay the schedule until it gets back inside. This allows for heating
 # and cooling as fast as possible and not continuing until temp is reached.
+# "Behind" is direction-aware (2026-11-08): too cold on a rising ramp or a
+# hold, too hot on a falling ramp. When the kiln is *ahead* (overshot a slow
+# ramp, or cooled faster than a slow cool) the schedule keeps running so the
+# target and the temperature converge, instead of stalling the firing.
 kiln_must_catch_up = True
 
 # This setting is required. 
