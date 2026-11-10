@@ -10,6 +10,8 @@ import busio
 import adafruit_bitbangio as bitbangio
 import statistics
 
+import holds
+
 log = logging.getLogger(__name__)
 
 class DupFilter(object):
@@ -413,6 +415,28 @@ class Oven(threading.Thread):
         log.info("Running schedule %s starting at %d minutes" % (profile.name,startat))
         log.info("Starting")
 
+    def adjust_hold(self, which, add_min=None, end_now=False):
+        '''Change the candle or peak hold of the running firing.
+
+        Recomposes only the run after the current runtime (the watcher holds
+        the same Profile, so the web UI follows) and returns the new holds.
+        Raises holds.HoldError when the change is refused.'''
+        if self.state not in ("RUNNING", "PAUSED") or not self.profile:
+            raise holds.HoldError("no firing is running")
+        if end_now:
+            if which != 'candle':
+                raise holds.HoldError("only the candle can be ended early")
+            self.profile.end_candle(self.runtime)
+        else:
+            self.profile.extend_hold(which, add_min, self.runtime)
+        self.totaltime = self.profile.get_duration()
+        log.info("hold changed: %s %s at runtime %d s -> holds %s, total %d s" % (
+            which, "end now" if end_now else "+%s min" % add_min,
+            self.runtime, self.profile.holds, self.totaltime))
+        # the control loop saves the restart state every pass; don't write
+        # the same file from this (request) thread as well
+        return self.profile.holds
+
     def abort_run(self):
         self.reset()
         self.save_automatic_restart_state()
@@ -522,6 +546,11 @@ class Oven(threading.Thread):
             'pidstats': self.pid.pidstats,
             'catching_up': self.catching_up,
         }
+        # candle / peak holds of the run (docs/candle-and-peak-holds.md);
+        # also what automatic_restart rebuilds the curve from
+        if self.profile:
+            state['holds'] = self.profile.holds
+            state['phase'] = self.profile.phase(self.runtime)
         return state
 
     def save_state(self):
@@ -571,7 +600,12 @@ class Oven(threading.Thread):
         log.info("automatically restarting profile = %s at minute = %d" % (profile_path,startat))
         with open(profile_path) as infile:
             profile_json = json.dumps(json.load(infile))
-        profile = Profile(profile_json)
+        # rebuild the same curve, including live hold changes (D8); a state
+        # file from before holds existed gets the schedule's defaults
+        h = d.get("holds") or {}
+        candle = (h.get("candle") or {}).get("hold_min")
+        peak_extra = (h.get("peak") or {}).get("extra_min")
+        profile = Profile(profile_json, candle_min=candle, peak_extra_min=peak_extra)
         self.run_profile(profile, startat=startat, allow_seek=False)  # We don't want a seek on an auto restart.
         self.cost = d["cost"]
         time.sleep(1)
@@ -799,10 +833,92 @@ class RealOven(Oven):
             pass
 
 class Profile():
-    def __init__(self, json_data):
+    '''A schedule as it will be fired.
+
+    `data` is the composed run: the stored schedule plus the candle (for
+    schedules marked "candle": true) and any extra peak-hold time. The stored
+    schedule is kept in `body` so live hold changes can recompose it. See
+    lib/holds.py and docs/candle-and-peak-holds.md.
+    '''
+    def __init__(self, json_data, candle_min=None, peak_extra_min=None):
         obj = json.loads(json_data)
         self.name = obj["name"]
-        self.data = sorted(obj["data"])
+        self.body = sorted(obj["data"])
+        self.candle = bool(obj.get("candle"))
+        if self.candle and self.body and self.body[0][0] != 0:
+            raise holds.HoldError("a candle schedule's body must start at time 0")
+        if candle_min is None:
+            candle_min = getattr(config, 'candle_hold_min_default', 60)
+        self.candle_hold_s = self._seconds(
+            candle_min, getattr(config, 'candle_hold_max_min', 1440), 'candle')
+        self.peak_extra_s = self._seconds(
+            peak_extra_min or 0, getattr(config, 'peak_extra_max_min', 120), 'peak extra')
+        self._compose()
+
+    @staticmethod
+    def _seconds(minutes, max_min, what):
+        try:
+            minutes = float(minutes)
+        except (TypeError, ValueError):
+            raise holds.HoldError("%s must be a number of minutes" % what)
+        if not 0 <= minutes <= max_min:
+            raise holds.HoldError("%s must be 0-%d min, not %s" % (what, max_min, minutes))
+        return int(round(minutes * 60))
+
+    def _compose(self):
+        self.data, self._holds = holds.compose(
+            self.body, self.candle, self.candle_hold_s if self.candle else 0,
+            self.peak_extra_s,
+            getattr(config, 'candle_start_temp', 25), getattr(config, 'candle_rate', 170))
+
+    @property
+    def holds(self):
+        '''hold settings and positions in minutes / composed-run seconds'''
+        return holds.report(self._holds)
+
+    def phase(self, runtime):
+        return holds.phase_at(self._holds, runtime)
+
+    def extend_hold(self, which, add_min, runtime):
+        '''Add `add_min` to the candle or peak hold of a running firing.
+        Only the part of the run after `runtime` moves (D7).'''
+        try:
+            add_min = float(add_min)
+        except (TypeError, ValueError):
+            raise holds.HoldError("add_min must be a number of minutes")
+        if add_min <= 0:
+            raise holds.HoldError("add_min must be more than 0")
+        if which == 'candle':
+            c = self._holds['candle']
+            if c is None:
+                raise holds.HoldError("%s has no candle" % self.name)
+            if runtime >= c['end_s']:
+                raise holds.HoldError("the candle is already over")
+            self.candle_hold_s = self._seconds(
+                (self.candle_hold_s / 60) + add_min,
+                getattr(config, 'candle_hold_max_min', 1440), 'candle')
+        elif which == 'peak':
+            p = self._holds['peak']
+            if p is None:
+                raise holds.HoldError("%s has no peak" % self.name)
+            if runtime >= p['end_s']:
+                raise holds.HoldError("the peak hold is already over")
+            self.peak_extra_s = self._seconds(
+                (self.peak_extra_s / 60) + add_min,
+                getattr(config, 'peak_extra_max_min', 120), 'peak extra')
+        else:
+            raise holds.HoldError("unknown hold %r (candle or peak)" % (which,))
+        self._compose()
+
+    def end_candle(self, runtime):
+        '''End the candle now: the firing proper starts at `runtime`.'''
+        c = self._holds['candle']
+        if c is None:
+            raise holds.HoldError("%s has no candle" % self.name)
+        if runtime >= c['end_s']:
+            raise holds.HoldError("the candle is already over")
+        self.candle_hold_s = max(0, int(round(runtime - c['start_s'])))
+        self._compose()
 
     def get_duration(self):
         return max([t for (t, x) in self.data])

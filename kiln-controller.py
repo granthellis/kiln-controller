@@ -28,6 +28,7 @@ sys.path.insert(0, script_dir + '/lib/')
 profile_path = config.kiln_profiles_directory
 
 from oven import SimulatedOven, RealOven, Profile
+import holds
 from ovenWatcher import OvenWatcher
 
 app = bottle.Bottle()
@@ -109,6 +110,47 @@ def handle_api_profiles():
     log.info("/api/profiles command received")
     return get_profiles()
 
+@app.get('/api/profile_shapes')
+def handle_api_profile_shapes():
+    '''Per schedule: whether it gets a candle, its body length and where its
+    peak hold sits in the body - what Home Assistant needs to plan a firing
+    with any candle / peak-extra setting.'''
+    shapes = {}
+    for p in json.loads(get_profiles()):
+        body = sorted(p.get('data') or [])
+        if len(body) < 2:
+            continue
+        _, h = holds.compose(body, False, 0, 0, 0, 1)
+        pk = h['peak']
+        shapes[p['name']] = {
+            'candle': bool(p.get('candle')),
+            'candle_temp': body[0][1] if p.get('candle') else None,
+            'body_s': body[-1][0],
+            'peak': {'temp': pk['temp'], 'start_s': pk['start_s'],
+                     'default_min': round(pk['default_s'] / 60, 3)},
+        }
+    return json.dumps({
+        'candle_rate': config.candle_rate,
+        'candle_start_temp': config.candle_start_temp,
+        'candle_hold_min_default': config.candle_hold_min_default,
+        'profiles': shapes,
+    })
+
+@app.get('/api/compose')
+def handle_api_compose():
+    '''Preview a run: /api/compose?profile=NAME&candle_min=180&peak_extra_min=30'''
+    q = bottle.request.query
+    profile = find_profile(q.get('profile'))
+    if profile is None:
+        return {"success": False, "error": "profile %s not found" % q.get('profile')}
+    try:
+        p = Profile(json.dumps(profile), candle_min=q.get('candle_min') or None,
+                    peak_extra_min=q.get('peak_extra_min') or None)
+    except holds.HoldError as e:
+        return {"success": False, "error": str(e)}
+    return json.dumps({"success": True, "data": p.data, "holds": p.holds,
+                       "duration_s": p.get_duration()})
+
 @app.get('/api')
 def handle_api():
     log.info("/api GET command received")
@@ -141,9 +183,19 @@ def handle_api():
         if profile is None:
             return { "success" : False, "error" : "profile %s not found" % wanted }
 
-        # FIXME juggling of json should happen in the Profile class
-        profile_json = json.dumps(profile)
-        profile = Profile(profile_json)
+        # per-firing holds (docs/candle-and-peak-holds.md): candle_min is the
+        # whole candle hold (default config.candle_hold_min_default), and
+        # peak_extra_min is added to the schedule's own top hold
+        req = bottle.request.json
+        try:
+            # FIXME juggling of json should happen in the Profile class
+            profile = Profile(json.dumps(profile),
+                              candle_min=req.get('candle_min'),
+                              peak_extra_min=req.get('peak_extra_min'))
+        except holds.HoldError as e:
+            log.error("run refused: %s" % e)
+            return {"success": False, "error": str(e)}
+        log.info("holds for this run: %s" % profile.holds)
         oven.run_profile(profile, startat=startat, allow_seek=allow_seek)
         if oven.state != "RUNNING":
             # run_profile() refused the start (2026-10-09: e.g. the hardware
@@ -153,6 +205,20 @@ def handle_api():
                     "error": "run refused - see controller log "
                             "(watchdog not armed?)"}
         ovenWatcher.record(profile)
+
+    # change the candle or peak hold of the running firing:
+    #   {"cmd": "hold", "which": "candle"|"peak", "add_min": 30}
+    #   {"cmd": "hold", "which": "candle", "end_now": true}
+    if bottle.request.json['cmd'] == 'hold':
+        req = bottle.request.json
+        log.info("api hold command received: %s" % req)
+        try:
+            new = oven.adjust_hold(req.get('which'), add_min=req.get('add_min'),
+                                   end_now=bool(req.get('end_now')))
+        except holds.HoldError as e:
+            log.error("hold change refused: %s" % e)
+            return {"success": False, "error": str(e)}
+        return {"success": True, "holds": new, "totaltime": oven.totaltime}
 
     if bottle.request.json['cmd'] == 'pause':
         log.info("api pause command received")
@@ -224,7 +290,13 @@ def handle_control():
                     profile_obj = msgdict.get('profile')
                     if profile_obj:
                         profile_json = json.dumps(profile_obj)
-                        profile = Profile(profile_json)
+                        try:
+                            profile = Profile(profile_json,
+                                              candle_min=msgdict.get('candle_min'),
+                                              peak_extra_min=msgdict.get('peak_extra_min'))
+                        except holds.HoldError as e:
+                            log.error("run refused: %s" % e)
+                            continue
                     oven.run_profile(profile)
                     ovenWatcher.record(profile)
                 elif msgdict.get("cmd") == "SIMULATE":
@@ -339,12 +411,22 @@ def get_profiles():
 
 def save_profile(profile, force=False):
     profile=add_temp_units(profile)
-    profile_json = json.dumps(profile)
     filename = profile['name']+".json"
     filepath = os.path.join(profile_path, filename)
     if not force and os.path.exists(filepath):
         log.error("Could not write, %s already exists" % filepath)
         return False
+    # the web-UI editor saves only {type, data, name}: keep the existing
+    # file's candle marker (docs/candle-and-peak-holds.md, D10)
+    existing = None
+    if os.path.exists(filepath):
+        try:
+            with open(filepath) as f:
+                existing = json.load(f)
+        except (OSError, ValueError):
+            existing = None
+    profile = holds.keep_markers(profile, existing)
+    profile_json = json.dumps(profile)
     with open(filepath, 'w+') as f:
         f.write(profile_json)
         f.close()
