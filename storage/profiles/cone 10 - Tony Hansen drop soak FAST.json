@@ -1,1 +1,1 @@
-{"type": "profile", "data": [[0, 25], [5760, 121], [9360, 121], [12960, 1153], [13860, 1153], [20580, 1260], [21780, 1260], [22440, 1153], [24240, 1153]], "name": "cone 10 - Tony Hansen drop soak FAST", "temp_units": "c"}
+{"type": "profile", "data": [[0, 121], [3600, 1153], [4500, 1153], [11220, 1260], [12420, 1260], [13080, 1153], [14880, 1153]], "name": "cone 10 - Tony Hansen drop soak FAST", "temp_units": "c", "candle": true}

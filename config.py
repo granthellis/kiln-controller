@@ -324,3 +324,17 @@ watchdog = True
 watchdog_timeout = 60
 watchdog_fail_closed = True
 watchdog_device = "/dev/watchdog0"
+
+########################################################################
+# Candle and peak holds, set per firing (docs/candle-and-peak-holds.md)
+#
+# Schedules marked "candle": true store only the firing, starting at the
+# candle temperature. At run time the controller prepends a ramp from
+# candle_start_temp at candle_rate C/h and a hold of candle_min minutes
+# (the run request's candle_min, else candle_hold_min_default).
+# peak_extra_min adds time to the hold at the schedule's top temperature.
+candle_start_temp = 25         # degrees C the candle ramp starts from
+candle_rate = 170              # degrees C per hour (~30 min to 120 C)
+candle_hold_min_default = 60   # minutes
+candle_hold_max_min = 1440     # minutes, incl. live extensions
+peak_extra_max_min = 120       # minutes added to a schedule's own peak hold

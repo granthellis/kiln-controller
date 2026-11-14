@@ -208,12 +208,34 @@ if(axis.max<=60) {
   }
 }
 
+// candle + peak holds are composed by the controller at run time
+// (docs/candle-and-peak-holds.md); preview the composed run's length
+function previewRun()
+{
+    var p = profiles[selected_profile];
+    if (!p) return;
+    $('#candle_row').toggle(!!p.candle);
+    $.getJSON('/api/compose', {
+        profile: p.name,
+        candle_min: $('#candle_min').val(),
+        peak_extra_min: $('#peak_extra_min').val()
+    }, function(r) {
+        if (!r.success) { $('#sel_prof_eta').html(r.error); return; }
+        var s = r.duration_s;
+        $('#sel_prof_eta').html(Math.floor(s / 3600) + ' h ' + Math.round((s % 3600) / 60) + ' m');
+    });
+}
+
+$(document).on('show.bs.modal', '#jobSummaryModal', previewRun);
+
 function runTask()
 {
     var cmd =
     {
         "cmd": "RUN",
-        "profile": profiles[selected_profile]
+        "profile": profiles[selected_profile],
+        "candle_min": Number($('#candle_min').val()),
+        "peak_extra_min": Number($('#peak_extra_min').val())
     }
 
     graph.live.data = [];

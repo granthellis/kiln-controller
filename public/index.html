@@ -106,6 +106,8 @@
       <tr><td>Selected Profile</td><td><b><span id="sel_prof"></span></b></td></tr>
       <tr><td>Estimated Runtime</td><td><b><span id="sel_prof_eta"></span></b></td></tr>
       <tr><td>Estimated Power consumption</td><td><b><span id="sel_prof_cost"></span></b></td></tr>
+      <tr id="candle_row"><td>Candle hold (min)</td><td><input type="number" id="candle_min" class="form-control" min="0" max="1440" step="15" value="60" style="width: 100px" oninput="previewRun()"/></td></tr>
+      <tr><td>Extra top-temperature hold (min)</td><td><input type="number" id="peak_extra_min" class="form-control" min="0" max="120" step="5" value="0" style="width: 100px" oninput="previewRun()"/></td></tr>
      </table>
     </div>
     <div class="modal-footer">
